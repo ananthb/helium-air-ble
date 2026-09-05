@@ -1,0 +1,108 @@
+[
+  {
+    "service": "0x1801",
+    "char": "0x2A05",
+    "handle": 3,
+    "props": 32,
+    "prop_names": "indicate",
+    "descriptors": [
+      [
+        "0x2902",
+        4
+      ]
+    ],
+    "value": null
+  },
+  {
+    "service": "0x1800",
+    "char": "0x2A00",
+    "handle": 7,
+    "props": 2,
+    "prop_names": "read",
+    "descriptors": [],
+    "value": "48454c4d5f5f3938363900"
+  },
+  {
+    "service": "0x1800",
+    "char": "0x2A01",
+    "handle": 9,
+    "props": 2,
+    "prop_names": "read",
+    "descriptors": [],
+    "value": "0000"
+  },
+  {
+    "service": "0x1800",
+    "char": "0x2A04",
+    "handle": 11,
+    "props": 2,
+    "prop_names": "read",
+    "descriptors": [],
+    "value": "0000000000000000"
+  },
+  {
+    "service": "0xA00A",
+    "char": "0xB001",
+    "handle": 14,
+    "props": 2,
+    "prop_names": "read",
+    "descriptors": [
+      [
+        "0x2901",
+        15
+      ]
+    ],
+    "value": "01007a0148656c69756d0000000000000000000048454c4d30303030303135484d4b50316163000000000000000000000000000048454c4d5f5f39383639000000000000000000000100000016000000000000003c3e000000000000000000000000000004006538386638653031393836390000000000000061616161003000000000000000000000000000000000000000000000000000000000000000"
+  },
+  {
+    "service": "0xA00A",
+    "char": "0xB002",
+    "handle": 17,
+    "props": 12,
+    "prop_names": "write-nr,write",
+    "descriptors": [],
+    "value": null
+  },
+  {
+    "service": "0xA00A",
+    "char": "0xB003",
+    "handle": 19,
+    "props": 16,
+    "prop_names": "notify",
+    "descriptors": [
+      [
+        "0x2902",
+        20
+      ]
+    ],
+    "value": null
+  },
+  {
+    "service": "0xA00A",
+    "char": "0xB004",
+    "handle": 22,
+    "props": 32,
+    "prop_names": "indicate",
+    "descriptors": [
+      [
+        "0x2902",
+        23
+      ]
+    ],
+    "value": null
+  },
+  {
+    "service": "0x180F",
+    "char": "0x2A19",
+    "handle": 26,
+    "props": 18,
+    "prop_names": "read,notify",
+    "descriptors": [
+      [
+        "0x2902",
+        27
+      ]
+    ],
+    "value": "5a"
+  }
+]
