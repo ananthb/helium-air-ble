@@ -1,6 +1,6 @@
 port module Main exposing (main)
 
-{-| A/C — a Web Bluetooth remote for A/Cs, styled as an LCD remote.
+{-| A Web Bluetooth remote for broadcast BLE air conditioners, styled as an LCD remote.
 
 The UI and the whole connection state machine live here, pure. The bytes never
 cross this boundary: Elm sends semantic intents out `sendIntent` and receives
@@ -14,6 +14,7 @@ import Html.Attributes exposing (..)
 import Html.Events exposing (onClick, onInput)
 import Json.Decode as D
 import Json.Encode as E
+import Time
 
 
 
@@ -54,7 +55,14 @@ type alias Model =
     , pin : String
     , device : Maybe String
     , error : Maybe String
+    , backlight : Bool
+    , idle : Int
     }
+
+
+backlightTimeout : Int
+backlightTimeout =
+    60
 
 
 modes : List String
@@ -74,6 +82,8 @@ init _ =
       , pin = "0000"
       , device = Nothing
       , error = Nothing
+      , backlight = True
+      , idle = 0
       }
     , Cmd.none
     )
@@ -94,6 +104,7 @@ type Msg
     | CycleFan
     | SetSwing Bool
     | Event D.Value
+    | Tick
 
 
 intent : List ( String, E.Value ) -> Cmd Msg
@@ -126,6 +137,24 @@ next xs cur =
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
+    case msg of
+        Tick ->
+            let
+                i =
+                    model.idle + 1
+            in
+            ( { model | idle = i, backlight = i < backlightTimeout }, Cmd.none )
+
+        Event value ->
+            ( applyEvent value model, Cmd.none )
+
+        _ ->
+            -- any user interaction wakes the backlight and resets the idle timer
+            userUpdate msg { model | idle = 0, backlight = True }
+
+
+userUpdate : Msg -> Model -> ( Model, Cmd Msg )
+userUpdate msg model =
     let
         st =
             model.status
@@ -158,8 +187,8 @@ update msg model =
         SetSwing on ->
             ( model, intent [ ( "kind", E.string "setSwing" ), ( "on", E.bool on ) ] )
 
-        Event value ->
-            ( applyEvent value model, Cmd.none )
+        _ ->
+            ( model, Cmd.none )
 
 
 applyEvent : D.Value -> Model -> Model
@@ -265,7 +294,7 @@ view model =
     div [ class "stage" ]
         [ div [ class "remote", classList [ ( "asleep", model.conn /= Ready ) ] ]
             [ viewStatusBar model
-            , viewLcd model
+            , viewLcd model.backlight model
             , viewError model.error
             , viewPad model
             ]
@@ -320,7 +349,7 @@ tooltip model =
             "Connected to " ++ Maybe.withDefault "the AC" model.device
 
         Connecting ->
-            "Scanning for a A/C…"
+            "Scanning for an A/C…"
 
         NeedPin ->
             "Connected — enter the passkey to unlock"
@@ -338,9 +367,9 @@ btUri =
 -- LCD
 
 
-viewLcd : Model -> Html Msg
-viewLcd model =
-    div [ class "lcd" ] <|
+viewLcd : Bool -> Model -> Html Msg
+viewLcd backlight model =
+    div [ classList [ ( "lcd", True ), ( "dark", not backlight ) ] ] <|
         case model.conn of
             Ready ->
                 viewReadout model.status
@@ -463,9 +492,9 @@ viewPad model =
                 [ button [ classList [ ( "btn", True ), ( "power", True ), ( "on", st.power ) ], onClick (SetPower (not st.power)) ]
                     [ glyph "⏻", small "POWER" ]
                 , div [ class "rocker" ]
-                    [ button [ class "btn up", onClick (SetTemp (Basics.min 30 (st.temp + 1))) ] [ text "＋" ]
+                    [ button [ class "btn up", onClick (SetTemp (Basics.min 30 (st.temp + 1))) ] [ text "+" ]
                     , span [ class "rocker-lbl" ] [ text "TEMP" ]
-                    , button [ class "btn down", onClick (SetTemp (Basics.max 16 (st.temp - 1))) ] [ text "－" ]
+                    , button [ class "btn down", onClick (SetTemp (Basics.max 16 (st.temp - 1))) ] [ text "\u{2212}" ]
                     ]
                 , button [ class "btn", onClick CycleMode ] [ glyph (modeGlyph st.mode), small "MODE" ]
                 , button [ class "btn", onClick CycleFan ] [ glyph "❋", small "FAN" ]
@@ -513,5 +542,13 @@ main =
         { init = init
         , update = update
         , view = view
-        , subscriptions = \_ -> bleEvents Event
+        , subscriptions = subscriptions
         }
+
+
+subscriptions : Model -> Sub Msg
+subscriptions _ =
+    Sub.batch
+        [ bleEvents Event
+        , Time.every 1000 (\_ -> Tick)
+        ]

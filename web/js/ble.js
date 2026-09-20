@@ -1,4 +1,4 @@
-// Web Bluetooth transport for a A/C. Plain JS. Emits semantic events;
+// Web Bluetooth transport for a broadcast BLE A/C. Plain JS. Emits semantic events;
 // takes semantic intents. All wire encoding/decoding lives in codec.js.
 //
 // Web Bluetooth is Chrome/Edge/Chromium on desktop and Android only, over HTTPS,

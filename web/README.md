@@ -1,13 +1,13 @@
-# A/C — web control panel
+# A/C Remote — web control panel
 
 A [Web Bluetooth](https://developer.mozilla.org/docs/Web/API/Web_Bluetooth_API)
-control panel for A/Cs. Runs entirely in the browser, talks straight to the
+control panel for broadcast BLE air conditioners. Runs entirely in the browser, talks straight to the
 AC over BLE — no cloud, no server.
 
 - **Elm** owns the UI and the connection state machine (`src/Main.elm`), pure,
   over ports.
 - **Plain JS** owns the transport and wire codec (`js/ble.js`, `js/codec.js`) —
-  the codec matches [`../tools/ac_frames.js`](../tools/ac_frames.js) and
+  the codec matches the repo's reference tool and
   [`../proto/vectors.json`](../proto/vectors.json).
 
 Works in Chrome / Edge / Chromium on desktop and Android, over HTTPS, with the

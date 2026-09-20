@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="A/C Remote">
+  <rect width="512" height="512" rx="112" fill="#0e1620"/>
+  <!-- remote body -->
+  <rect x="150" y="46" width="212" height="420" rx="46" fill="#182430" stroke="#33495d" stroke-width="6"/>
+  <!-- LCD window -->
+  <rect x="182" y="78" width="148" height="90" rx="13" fill="#b7c9a6"/>
+  <rect x="196" y="112" width="46" height="22" rx="3" fill="#2b3b25"/>
+  <rect x="252" y="100" width="62" height="46" rx="4" fill="#2b3b25" opacity="0.9"/>
+  <!-- closed button cover -->
+  <rect x="172" y="190" width="168" height="256" rx="30" fill="#0f1a24" stroke="#33495d" stroke-width="5"/>
+  <!-- cover grip -->
+  <line x1="224" y1="210" x2="288" y2="210" stroke="#33495d" stroke-width="6" stroke-linecap="round"/>
+  <!-- periodic-table He element, near the bottom of the cover -->
+  <rect x="198" y="292" width="116" height="130" rx="12" fill="#eaf6ef" stroke="#16a06f" stroke-width="5"/>
+  <text x="213" y="323" font-family="Helvetica, Arial, sans-serif" font-size="25" font-weight="700" fill="#0f2c22">2</text>
+  <text x="256" y="384" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="62" font-weight="800" fill="#0f2c22">He</text>
+  <text x="256" y="410" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-size="18" font-weight="600" fill="#16a06f">4.003</text>
+</svg>

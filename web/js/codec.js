@@ -1,4 +1,4 @@
-// A/C wire codec — the same frames as tools/ac_frames.js and the
+// A/C wire codec — the same frames as the reference tool and the
 // Python integration, checked against proto/vectors.json.
 // Plain JS, no dependencies. This is "the BLE bits" together with ble.js.
 
