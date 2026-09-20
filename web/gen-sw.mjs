@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, readdirSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 
 const dist = "dist";
@@ -29,17 +29,23 @@ self.addEventListener("activate", (e) => {
   })());
 });
 
-// Cache-first for the app shell (offline), network fallback that refreshes the cache.
+// Network-first for the app shell so a new deploy always wins when online, with a
+// cache fallback for offline. (Cache-first was leaving stale builds on screen.)
 self.addEventListener("fetch", (e) => {
   const req = e.request;
   if (req.method !== "GET" || new URL(req.url).origin !== location.origin) return;
   e.respondWith((async () => {
-    const cached = await caches.match(req);
-    const network = fetch(req).then((res) => {
-      if (res && res.ok) caches.open(CACHE).then((c) => c.put(req, res.clone()));
+    try {
+      const res = await fetch(req);
+      if (res && res.ok) {
+        const c = await caches.open(CACHE);
+        c.put(req, res.clone());
+      }
       return res;
-    }).catch(() => cached);
-    return cached || network;
+    } catch (_) {
+      const cached = await caches.match(req);
+      return cached || caches.match("./");
+    }
   })());
 });
 `;

@@ -31,28 +31,69 @@
     }
     .stage {
       min-height: 100dvh; display: flex; justify-content: center; align-items: stretch;
+      padding: calc(10px + env(safe-area-inset-top)) 10px calc(10px + env(safe-area-inset-bottom));
     }
 
-    /* The remote body — fills the screen on mobile, a centered card on desktop. */
+    /* The remote body — a bordered, rounded case that nearly fills the screen on
+       mobile (top and bottom edges visible) and is a centered card on desktop. */
     .remote {
       width: 100%; max-width: 380px; display: flex; flex-direction: column;
-      gap: 16px; padding: 22px 20px calc(24px + env(safe-area-inset-bottom));
+      gap: 16px; padding: 20px 20px 22px;
       background: linear-gradient(160deg, var(--case-a), var(--case-b));
-      border-left: 1px solid var(--case-edge); border-right: 1px solid var(--case-edge);
+      border: 1px solid var(--case-edge); border-radius: 28px;
+      box-shadow: 0 12px 34px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.06), inset 0 -1px 0 rgba(0,0,0,.35);
     }
     @media (min-width: 460px) {
       .stage { align-items: center; padding: 28px; }
       .remote {
-        min-height: 0; border-radius: 30px; border: 1px solid var(--case-edge);
+        min-height: 0; max-height: calc(100dvh - 56px); border-radius: 30px;
         box-shadow: 0 30px 60px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.06);
       }
     }
     .remote.asleep { filter: saturate(.6) brightness(.96); }
 
-    /* Status bar: indicator LED + Bluetooth logo, and the brand. */
-    .statusbar { display: flex; align-items: center; justify-content: space-between; }
-    .indicator { display: inline-flex; align-items: center; gap: 8px; padding: 4px 6px; cursor: help; }
-    .bt-logo { width: 16px; height: 16px; opacity: .85; display: block; }
+    /* Status bar: indicator LED + Bluetooth logo + device name + menu, and brand. */
+    .statusbar { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .indicator {
+      display: inline-flex; align-items: center; gap: 8px; padding: 5px 8px; cursor: pointer;
+      background: rgba(255,255,255,.04); border: 1px solid var(--case-edge); border-radius: 10px;
+      color: var(--btn-ink); font: inherit; min-width: 0; max-width: 260px;
+    }
+    .indicator:active { transform: translateY(1px); }
+    .devname { font-size: 12px; color: #c3ccd6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+    .caret { font-size: 10px; color: var(--cap); }
+    .bt-logo { width: 16px; height: 16px; opacity: .85; display: block; flex: none; }
+
+    /* Device menu (switch / add) */
+    .overlay { position: fixed; inset: 0; z-index: 20; }
+    .devmenu {
+      position: absolute; top: calc(100% + 6px); left: 0; z-index: 21; min-width: 200px; max-width: 300px;
+      background: linear-gradient(180deg, #262a31, #1c1f25); border: 1px solid var(--case-edge);
+      border-radius: 12px; padding: 6px; box-shadow: 0 16px 34px rgba(0,0,0,.55);
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .devmenu-empty { padding: 10px 12px; font-size: 12px; color: var(--cap); }
+    .devrow { display: flex; align-items: center; border-radius: 8px; }
+    .devrow.sel { background: rgba(22,160,111,.16); }
+    .devrow-pick {
+      flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 9px 10px;
+      background: none; border: 0; color: var(--btn-ink); font: inherit; cursor: pointer; border-radius: 8px;
+    }
+    .devrow-pick:hover { background: rgba(255,255,255,.05); }
+    .devrow-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+    .dot.ok { background: #2ee27a; box-shadow: 0 0 6px rgba(46,226,122,.7); }
+    .dot.off { background: #5a6470; }
+    .devrow-x {
+      background: none; border: 0; color: var(--cap); font-size: 18px; line-height: 1; cursor: pointer;
+      padding: 6px 10px; border-radius: 8px;
+    }
+    .devrow-x:hover { color: #e88; background: rgba(255,255,255,.05); }
+    .devmenu-add {
+      margin-top: 2px; padding: 10px 10px; background: none; border: 0; border-top: 1px solid var(--case-edge);
+      color: var(--accent); font: inherit; font-weight: 600; text-align: left; cursor: pointer; border-radius: 0 0 8px 8px;
+    }
+    .devmenu-add:hover { background: rgba(22,160,111,.12); }
     .led {
       width: 11px; height: 11px; border-radius: 50%;
       background: #555; box-shadow: inset 0 0 3px rgba(0,0,0,.6);
@@ -169,6 +210,14 @@
     if ("serviceWorker" in navigator) {
       addEventListener("load", function () {
         navigator.serviceWorker.register("sw.js").catch(function () {});
+        // When a new service worker takes control (new deploy), reload once so the
+        // fresh build shows immediately instead of the previous one.
+        var reloaded = false;
+        navigator.serviceWorker.addEventListener("controllerchange", function () {
+          if (reloaded) return;
+          reloaded = true;
+          location.reload();
+        });
       });
     }
   </script>

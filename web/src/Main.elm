@@ -5,7 +5,7 @@ port module Main exposing (main)
 The UI and the whole connection state machine live here, pure. The bytes never
 cross this boundary: Elm sends semantic intents out `sendIntent` and receives
 decoded status/events on `bleEvents`. Plain JS (js/ble.js, js/codec.js) owns the
-Web Bluetooth transport and the wire codec.
+Web Bluetooth transport, the wire codec, and the persisted device registry.
 -}
 
 import Browser
@@ -49,11 +49,17 @@ type alias Status =
     }
 
 
+type alias Dev =
+    { id : String, name : String, available : Bool }
+
+
 type alias Model =
     { conn : Conn
     , status : Status
     , pin : String
     , device : Maybe String
+    , devices : List Dev
+    , menuOpen : Bool
     , error : Maybe String
     , backlight : Bool
     , idle : Int
@@ -81,11 +87,13 @@ init _ =
       , status = Status False 24 "cool" "auto" False 0 0
       , pin = "0000"
       , device = Nothing
+      , devices = []
+      , menuOpen = False
       , error = Nothing
       , backlight = True
       , idle = 0
       }
-    , Cmd.none
+    , sendIntent (E.object [ ( "kind", E.string "listDevices" ) ])
     )
 
 
@@ -94,7 +102,10 @@ init _ =
 
 
 type Msg
-    = Connect
+    = AddDevice
+    | PickDevice String
+    | ForgetDevice String
+    | ToggleMenu
     | Disconnect
     | PinChanged String
     | Login
@@ -160,11 +171,24 @@ userUpdate msg model =
             model.status
     in
     case msg of
-        Connect ->
-            ( { model | conn = Connecting, error = Nothing }, intent [ ( "kind", E.string "connect" ) ] )
+        AddDevice ->
+            ( { model | conn = Connecting, menuOpen = False, error = Nothing }
+            , intent [ ( "kind", E.string "addDevice" ) ]
+            )
+
+        PickDevice id ->
+            ( { model | conn = Connecting, menuOpen = False, error = Nothing }
+            , intent [ ( "kind", E.string "connectId" ), ( "id", E.string id ) ]
+            )
+
+        ForgetDevice id ->
+            ( model, intent [ ( "kind", E.string "forget" ), ( "id", E.string id ) ] )
+
+        ToggleMenu ->
+            ( { model | menuOpen = not model.menuOpen }, Cmd.none )
 
         Disconnect ->
-            ( { model | conn = Disconnected, device = Nothing }, intent [ ( "kind", E.string "disconnect" ) ] )
+            ( { model | conn = Disconnected }, intent [ ( "kind", E.string "disconnect" ) ] )
 
         PinChanged p ->
             ( { model | pin = String.filter Char.isDigit p |> String.left 4 }, Cmd.none )
@@ -195,14 +219,22 @@ applyEvent : D.Value -> Model -> Model
 applyEvent value model =
     case D.decodeValue eventDecoder value of
         Ok (StateEv s dev) ->
-            { model
-                | conn = s
-                , device = orElse dev model.device
-                , error = Nothing
-            }
+            { model | conn = s, device = orElse dev model.device, error = Nothing }
 
         Ok (StatusEv status) ->
             { model | status = status, conn = Ready }
+
+        Ok (DevicesEv devs current) ->
+            { model
+                | devices = devs
+                , device =
+                    case current |> Maybe.andThen (\cid -> devs |> List.filter (\d -> d.id == cid) |> List.head) of
+                        Just d ->
+                            Just d.name
+
+                        Nothing ->
+                            model.device
+            }
 
         Ok (ErrorEv m) ->
             { model
@@ -232,6 +264,7 @@ orElse a b =
 type Ev
     = StateEv Conn (Maybe String)
     | StatusEv Status
+    | DevicesEv (List Dev) (Maybe String)
     | ErrorEv String
 
 
@@ -249,12 +282,25 @@ eventDecoder =
                     "status" ->
                         D.map StatusEv statusDecoder
 
+                    "devices" ->
+                        D.map2 DevicesEv
+                            (D.field "devices" (D.list devDecoder))
+                            (D.maybe (D.field "current" D.string))
+
                     "error" ->
                         D.map ErrorEv (D.field "message" D.string)
 
                     _ ->
                         D.fail ("unknown event " ++ t)
             )
+
+
+devDecoder : D.Decoder Dev
+devDecoder =
+    D.map3 Dev
+        (D.field "id" D.string)
+        (D.field "name" D.string)
+        (D.oneOf [ D.field "available" D.bool, D.succeed True ])
 
 
 connFromString : String -> Conn
@@ -312,17 +358,57 @@ viewError err =
 
 
 
--- STATUS BAR: an indicator LED + Bluetooth logo. Hover shows A/C info.
+-- STATUS BAR: indicator LED + Bluetooth logo + device name + device menu.
 
 
 viewStatusBar : Model -> Html Msg
 viewStatusBar model =
     div [ class "statusbar" ]
-        [ div [ class "indicator", title (tooltip model) ]
+        ([ button [ class "indicator", onClick ToggleMenu, title (tooltip model) ]
             [ span [ class ("led " ++ ledClass model.conn) ] []
             , img [ class "bt-logo", src btUri, alt "Bluetooth" ] []
+            , span [ class "devname" ] [ text (Maybe.withDefault "Select A/C" model.device) ]
+            , span [ class "caret" ] [ text "▾" ]
             ]
-        , span [ class "brand" ] [ text "A/C" ]
+         , span [ class "brand" ] [ text "A/C" ]
+         ]
+            ++ (if model.menuOpen then
+                    [ div [ class "overlay", onClick ToggleMenu ] []
+                    , viewMenu model
+                    ]
+
+                else
+                    []
+               )
+        )
+
+
+viewMenu : Model -> Html Msg
+viewMenu model =
+    div [ class "devmenu" ]
+        (if List.isEmpty model.devices then
+            [ div [ class "devmenu-empty" ] [ text "No saved A/Cs yet" ]
+            , addRow
+            ]
+
+         else
+            List.map (viewDevRow model) model.devices ++ [ addRow ]
+        )
+
+
+addRow : Html Msg
+addRow =
+    button [ class "devmenu-add", onClick AddDevice ] [ text "+  Add an A/C" ]
+
+
+viewDevRow : Model -> Dev -> Html Msg
+viewDevRow model dev =
+    div [ classList [ ( "devrow", True ), ( "sel", model.device == Just dev.name ) ] ]
+        [ button [ class "devrow-pick", onClick (PickDevice dev.id) ]
+            [ span [ class ("dot " ++ (if dev.available then "ok" else "off")) ] []
+            , span [ class "devrow-name" ] [ text dev.name ]
+            ]
+        , button [ class "devrow-x", title "Forget this A/C", onClick (ForgetDevice dev.id) ] [ text "×" ]
         ]
 
 
@@ -346,16 +432,16 @@ tooltip : Model -> String
 tooltip model =
     case model.conn of
         Ready ->
-            "Connected to " ++ Maybe.withDefault "the AC" model.device
+            "Connected to " ++ Maybe.withDefault "the A/C" model.device
 
         Connecting ->
-            "Scanning for an A/C…"
+            "Connecting…"
 
         NeedPin ->
             "Connected — enter the passkey to unlock"
 
         Disconnected ->
-            "Disconnected. Tap Connect."
+            "Disconnected — tap to pick or add an A/C"
 
 
 btUri : String
@@ -463,7 +549,13 @@ viewPad model =
     case model.conn of
         Disconnected ->
             div [ class "pad connect" ]
-                [ button [ class "btn power big", onClick Connect ] [ text "CONNECT" ] ]
+                [ case model.devices of
+                    d :: _ ->
+                        button [ class "btn power big", onClick (PickDevice d.id) ] [ text "CONNECT" ]
+
+                    [] ->
+                        button [ class "btn power big", onClick AddDevice ] [ text "ADD AN A/C" ]
+                ]
 
         Connecting ->
             div [ class "pad connect" ]

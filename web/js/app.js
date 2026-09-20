@@ -6,7 +6,10 @@ const ble = new AcRemote((event) => app.ports.bleEvents.send(event));
 
 app.ports.sendIntent.subscribe(async (intent) => {
   switch (intent.kind) {
-    case "connect": await ble.connect(); break;
+    case "listDevices": await ble.listDevices(); break;
+    case "addDevice": await ble.addDevice(); break;
+    case "connectId": await ble.connectId(intent.id); break;
+    case "forget": ble.forget(intent.id); break;
     case "login": await ble.login(intent.pin); break;
     case "setPower": await ble.setPower(intent.on); break;
     case "setTemp": await ble.setTemp(intent.value); break;
@@ -16,3 +19,6 @@ app.ports.sendIntent.subscribe(async (intent) => {
     case "disconnect": ble.disconnect(); break;
   }
 });
+
+// Populate the saved-device list on load.
+ble.listDevices();
