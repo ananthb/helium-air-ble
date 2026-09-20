@@ -3,7 +3,7 @@
 // Plain JS, no dependencies. This is "the BLE bits" together with ble.js.
 
 export const CMD = { STATUS_DATA: 500, BLE_PASSKEY: 600, AC_CTRL: 1003 };
-export const AC = { POWER: 0, SPEED: 1, TEMP: 2, MODE: 3, SWING: 4 };
+export const AC = { POWER: 0, SPEED: 1, TEMP: 2, MODE: 3, SWING: 4, OFF_TIMER: 18, ON_TIMER: 19, SWING_H: 21 };
 export const POWER = { ON: 0, OFF: 1 };
 export const MODE = { dry: 0, cool: 1, auto: 2, fan: 3, heat: 4, wind: 5, wet: 6 };
 export const FAN = { auto: 0, low: 1, medium: 2, high: 3 };
@@ -31,6 +31,12 @@ export function serialize(cmdId, payload = new Uint8Array(0), { totalLevel = 0, 
 }
 
 const acFrame = (ac, value) => serialize(CMD.AC_CTRL, new Uint8Array([value & 0xff]), { totalLevel: 2, level0: ac });
+const acBytes = (ac, payload) => serialize(CMD.AC_CTRL, payload, { totalLevel: 2, level0: ac });
+const u32be = (n) => {
+  const b = new Uint8Array(4);
+  new DataView(b.buffer).setUint32(0, Math.max(0, n | 0));
+  return b;
+};
 
 export const frames = {
   login: (pin) => {
@@ -43,6 +49,9 @@ export const frames = {
   setMode: (m) => acFrame(AC.MODE, MODE[m] ?? MODE.cool),
   setFan: (f) => acFrame(AC.SPEED, FAN[f] ?? FAN.auto),
   setSwing: (on) => acFrame(AC.SWING, on ? 1 : 0),
+  setSwingH: (on) => acBytes(AC.SWING_H, new Uint8Array([0, on ? 1 : 0])),
+  setOffTimer: (min) => acBytes(AC.OFF_TIMER, u32be(min)),
+  setOnTimer: (min) => acBytes(AC.ON_TIMER, u32be(min)),
 };
 
 // Incoming 0xB003 notify value is ASCII text "Poll:<seq>:<hexframe>" (or Diag:).
@@ -80,6 +89,7 @@ export function toStatus(dp, prev = {}) {
   if (0x05 in dp) s.fan = FAN_REV[dp[0x05]] ?? String(dp[0x05]);
   if (0x6a in dp) s.room = dp[0x6a];
   if (0x6e in dp) s.swing = dp[0x6e] === 1;
+  if (0x6f in dp) s.swing_h = dp[0x6f] === 1;
   if (0x1c in dp) s.watts = dp[0x1c];
   return s;
 }

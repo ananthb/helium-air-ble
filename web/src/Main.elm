@@ -44,6 +44,7 @@ type alias Status =
     , mode : String
     , fan : String
     , swing : Bool
+    , swingH : Bool
     , room : Int
     , watts : Int
     }
@@ -56,6 +57,7 @@ type alias Dev =
 type alias Model =
     { conn : Conn
     , status : Status
+    , timerMin : Int
     , device : Maybe String
     , currentId : Maybe String
     , devices : List Dev
@@ -85,7 +87,8 @@ fans =
 init : () -> ( Model, Cmd Msg )
 init _ =
     ( { conn = Disconnected
-      , status = Status False 24 "cool" "auto" False 0 0
+      , status = Status False 24 "cool" "auto" False False 0 0
+      , timerMin = 0
       , device = Nothing
       , currentId = Nothing
       , devices = []
@@ -116,6 +119,8 @@ type Msg
     | CycleMode
     | CycleFan
     | SetSwing Bool
+    | SetSwingH Bool
+    | CycleTimer
     | Event D.Value
     | Tick
 
@@ -146,6 +151,26 @@ next xs cur =
                             first
             in
             go xs
+
+
+{-| Cycle the timer through off / 1h / 2h / 4h / 8h (minutes). -}
+nextTimer : Int -> Int
+nextTimer cur =
+    case cur of
+        0 ->
+            60
+
+        60 ->
+            120
+
+        120 ->
+            240
+
+        240 ->
+            480
+
+        _ ->
+            0
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -198,7 +223,7 @@ userUpdate msg model =
             ( { model | conn = Disconnected }, intent [ ( "kind", E.string "disconnect" ) ] )
 
         SetPower on ->
-            ( model, intent [ ( "kind", E.string "setPower" ), ( "on", E.bool on ) ] )
+            ( { model | timerMin = 0 }, intent [ ( "kind", E.string "setPower" ), ( "on", E.bool on ) ] )
 
         SetTemp t ->
             ( model, intent [ ( "kind", E.string "setTemp" ), ( "value", E.int t ) ] )
@@ -211,6 +236,23 @@ userUpdate msg model =
 
         SetSwing on ->
             ( model, intent [ ( "kind", E.string "setSwing" ), ( "on", E.bool on ) ] )
+
+        SetSwingH on ->
+            ( model, intent [ ( "kind", E.string "setSwingH" ), ( "on", E.bool on ) ] )
+
+        CycleTimer ->
+            let
+                m =
+                    nextTimer model.timerMin
+
+                kind =
+                    if st.power then
+                        "setOffTimer"
+
+                    else
+                        "setOnTimer"
+            in
+            ( { model | timerMin = m }, intent [ ( "kind", E.string kind ), ( "value", E.int m ) ] )
 
         _ ->
             ( model, Cmd.none )
@@ -333,12 +375,13 @@ connFromString s =
 
 statusDecoder : D.Decoder Status
 statusDecoder =
-    D.map7 Status
+    D.map8 Status
         (D.field "power" D.bool)
         (D.field "temp" D.int)
         (D.field "mode" D.string)
         (D.field "fan" D.string)
         (D.oneOf [ D.field "swing" D.bool, D.succeed False ])
+        (D.oneOf [ D.field "swing_h" D.bool, D.succeed False ])
         (D.field "room" D.int)
         (D.field "watts" D.int)
 
@@ -522,7 +565,7 @@ viewReadout st =
         ]
     , div [ class "lcd-bot" ]
         [ span [ class "field" ] [ label_ "FAN", fanBars st.fan ]
-        , span [ classList [ ( "field", True ), ( "on", st.swing ) ] ] [ text "SWING ↕" ]
+        , span [ classList [ ( "field", True ), ( "on", st.swing || st.swingH ) ] ] [ text (swingText st) ]
         , span [ class "field watts" ] [ text (wattsText st) ]
         ]
     ]
@@ -546,6 +589,38 @@ wattsText st =
 
     else
         "STANDBY"
+
+
+swingText : Status -> String
+swingText st =
+    case ( st.swing, st.swingH ) of
+        ( True, True ) ->
+            "SWING ↕↔"
+
+        ( True, False ) ->
+            "SWING ↕"
+
+        ( False, True ) ->
+            "SWING ↔"
+
+        ( False, False ) ->
+            "SWING"
+
+
+timerLabel : Int -> Bool -> String
+timerLabel minutes power =
+    if minutes <= 0 then
+        "TIMER"
+
+    else
+        (if power then
+            "OFF "
+
+         else
+            "ON "
+        )
+            ++ String.fromInt (minutes // 60)
+            ++ "h"
 
 
 label_ : String -> Html Msg
@@ -621,6 +696,8 @@ viewPad model =
                 , button [ class "btn", onClick CycleMode ] [ glyph (modeGlyph st.mode), small "MODE" ]
                 , button [ class "btn", onClick CycleFan ] [ glyph "❋", small "FAN" ]
                 , button [ classList [ ( "btn", True ), ( "on", st.swing ) ], onClick (SetSwing (not st.swing)) ] [ glyph "↕", small "SWING" ]
+                , button [ classList [ ( "btn", True ), ( "on", st.swingH ) ], onClick (SetSwingH (not st.swingH)) ] [ glyph "↔", small "SWING H" ]
+                , button [ classList [ ( "btn", True ), ( "on", model.timerMin > 0 ) ], onClick CycleTimer ] [ glyph "⏱", small (timerLabel model.timerMin st.power) ]
                 , button [ class "btn ghost", onClick Disconnect ] [ glyph "⏏", small "EXIT" ]
                 ]
 

@@ -173,6 +173,9 @@ export class AcRemote {
   async setMode(m) { await this._write(frames.setMode(m)); this._poll(); }
   async setFan(f) { await this._write(frames.setFan(f)); this._poll(); }
   async setSwing(on) { await this._write(frames.setSwing(on)); this._poll(); }
+  async setSwingH(on) { await this._write(frames.setSwingH(on)); this._poll(); }
+  async setOffTimer(min) { await this._write(frames.setOffTimer(min)); this._poll(); }
+  async setOnTimer(min) { await this._write(frames.setOnTimer(min)); this._poll(); }
 
   disconnect() {
     try { if (this.device && this.device.gatt.connected) this.device.gatt.disconnect(); } catch (_) {}
