@@ -225,8 +225,14 @@ Each datapoint unit is `dpid(1) · type(1) · len(2 BE) · value(len)` — Tuya'
 | `0x67` | turbo | `0x79` | passkey ack |
 
 A live read while the unit was running returned: power **on**, mode **cool**,
-setpoint **22 °C**, fan **auto**, room **31 °C**, display on, swing-H on. Reading
-status required **no PIN** — the passkey gate is on control, not on observation.
+setpoint **22 °C**, fan **auto**, room **31 °C**, display on, swing-H on.
+
+**Reading requires the passkey login first.** A `STATUS_DATA` query on its own
+returns nothing; it starts streaming only after a `BLE_PASSKEY` login. The factory
+default `0000` unlocked this unit (so it is not paired to a custom PIN, or accepts
+the default). The login is authentication — it does not change the AC — but it is
+a write, so a pure passive read is not possible; the unit is request/response and
+gated.
 
 ### The passkey handshake — why blind writes did nothing
 

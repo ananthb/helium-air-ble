@@ -177,5 +177,5 @@
     "note": "factory default is 0000; app forces a user-chosen 4-digit PIN on first pairing (sendInitialBlePasskey). Sent after connect (sendLoginBlePasskey) before control is accepted.",
     "default_pin": "0000"
   },
-  "_verified": "Read path confirmed live via ESPHome proxy: power on, mode cool, setpoint 22C, fan auto, room 31C. Status needs no PIN."
+  "_verified": "Read path confirmed live via ESPHome proxy (power on, cool, 22C, room 31C). Reading requires a BLE_PASSKEY login first (0000 unlocked this unit); the STATUS_DATA query alone is silent."
 }
