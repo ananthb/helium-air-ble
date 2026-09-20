@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+import logging
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
-from .const import CONF_ADDRESS, CONF_PIN, DEFAULT_PIN
+from . import protocol
+from .const import CONF_ADDRESS, CONF_CONFIGURED, CONF_PIN, DEFAULT_PIN
 from .coordinator import AcCoordinator
 
-PLATFORMS = [Platform.CLIMATE, Platform.SENSOR]
+_LOGGER = logging.getLogger(__name__)
+
+PLATFORMS = [Platform.CLIMATE, Platform.SENSOR, Platform.TEXT, Platform.BUTTON]
 
 type AcConfigEntry = ConfigEntry[AcCoordinator]
 
@@ -24,6 +29,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: AcConfigEntry) -> bool:
     )
     await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = coordinator
+
+    # First time on the default passkey: generate a random one and configure it,
+    # mirroring the web app. Saved on the entry; changeable later via the passkey
+    # text entity / buttons. Best-effort — never block setup on it.
+    if entry.data.get(CONF_PIN, DEFAULT_PIN) == DEFAULT_PIN and not entry.data.get(CONF_CONFIGURED):
+        try:
+            await coordinator.async_set_passkey(protocol.random_pin())
+        except Exception:  # noqa: BLE001
+            _LOGGER.debug("could not auto-configure a passkey for %s", coordinator.address)
+        hass.config_entries.async_update_entry(entry, data={**entry.data, CONF_CONFIGURED: True})
+
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 

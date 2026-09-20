@@ -5,6 +5,7 @@ DOMAIN = "hlmblue"
 CONF_ADDRESS = "address"
 CONF_PIN = "pin"
 DEFAULT_PIN = "0000"
+CONF_CONFIGURED = "configured"
 
 # The unit is request/response and drops idle connections; poll on this cadence.
 POLL_INTERVAL = 30  # seconds

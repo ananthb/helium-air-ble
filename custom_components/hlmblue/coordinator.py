@@ -21,7 +21,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from . import protocol as p
-from .const import DOMAIN, POLL_INTERVAL, RUNNING_WATTS
+from .const import CONF_PIN, DEFAULT_PIN, DOMAIN, POLL_INTERVAL, RUNNING_WATTS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -36,6 +36,7 @@ class AcCoordinator(DataUpdateCoordinator[dict]):
             name=f"{DOMAIN} {address}",
             update_interval=timedelta(seconds=POLL_INTERVAL),
         )
+        self.entry = entry
         self.address = address
         self.pin = pin
         self._client: BleakClientWithServiceCache | None = None
@@ -95,7 +96,7 @@ class AcCoordinator(DataUpdateCoordinator[dict]):
             "power": self._power,
             "running": self._raw.get(p.DP_POWER) == 1 or watts > RUNNING_WATTS,
             "temp": r.get(p.DP_TEMP),
-            "mode": p.MODE_REV.get(r.get(p.DP_MODE)),
+            "mode": p.STATUS_MODE.get(r.get(p.DP_MODE)),
             "fan": p.FAN_REV.get(r.get(p.DP_FAN)),
             "swing": bool(r.get(p.DP_SWING_V)),
             "room": r.get(p.DP_ROOM_TEMP),
@@ -118,6 +119,21 @@ class AcCoordinator(DataUpdateCoordinator[dict]):
         await asyncio.sleep(0.4)
         await self._write(p.frame_status())
         self.async_set_updated_data(self._snapshot())
+
+    async def async_set_passkey(self, new_pin: str) -> None:
+        """Change the A/C's passkey (login with the current one, then send the new
+        one — the vendor app's order-based flow) and remember it on the entry."""
+        await self._ensure_connected()
+        await self._write(p.frame_login(new_pin))
+        await self._write(p.frame_status())
+        self.pin = new_pin
+        self.hass.config_entries.async_update_entry(
+            self.entry, data={**self.entry.data, CONF_PIN: new_pin}
+        )
+
+    async def async_reset_passkey(self) -> None:
+        """Reset the A/C to the 0000 default."""
+        await self.async_set_passkey(DEFAULT_PIN)
 
     async def async_shutdown(self) -> None:
         await super().async_shutdown()

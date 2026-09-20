@@ -32,7 +32,9 @@ AC_SWING = 4
 POWER_ON = 0
 POWER_OFF = 1
 MODE = {"dry": 0, "cool": 1, "auto": 2, "fan": 3, "heat": 4, "wind": 5, "wet": 6}
-MODE_REV = {v: k for k, v in MODE.items()}
+# The A/C reports mode with a different value map than it takes commands with
+# (verified live): status 0=auto, 1=cool, 2=heat, 3=dry, 4=fan.
+STATUS_MODE = {0: "auto", 1: "cool", 2: "heat", 3: "dry", 4: "fan"}
 FAN = {"auto": 0, "low": 1, "medium": 2, "high": 3}
 FAN_REV = {v: k for k, v in FAN.items()}
 
@@ -125,3 +127,13 @@ def decode_notify(raw: bytes) -> dict[int, int | None]:
         out[dpid] = int.from_bytes(val, "big") if val else None
         i += 4 + dlen
     return out
+
+
+def random_pin() -> str:
+    """A random 4-digit passkey, never 0000 (which the app forbids as the default)."""
+    import secrets
+
+    while True:
+        n = f"{secrets.randbelow(10000):04d}"
+        if n != "0000":
+            return n

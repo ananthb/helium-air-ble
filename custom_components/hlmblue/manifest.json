@@ -1,6 +1,6 @@
 {
   "domain": "hlmblue",
-  "name": "A/C Remote (BLE)",
+  "name": "He A/C (BLE)",
   "version": "0.1.0",
   "config_flow": true,
   "documentation": "https://github.com/ananthb/hlmblue",

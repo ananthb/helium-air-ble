@@ -7,7 +7,9 @@ export const AC = { POWER: 0, SPEED: 1, TEMP: 2, MODE: 3, SWING: 4 };
 export const POWER = { ON: 0, OFF: 1 };
 export const MODE = { dry: 0, cool: 1, auto: 2, fan: 3, heat: 4, wind: 5, wet: 6 };
 export const FAN = { auto: 0, low: 1, medium: 2, high: 3 };
-const MODE_REV = Object.fromEntries(Object.entries(MODE).map(([k, v]) => [v, k]));
+// The A/C *reports* mode with a different value map than it takes commands with
+// (verified live): status 0=auto, 1=cool, 2=heat, 3=dry, 4=fan.
+const STATUS_MODE = { 0: "auto", 1: "cool", 2: "heat", 3: "dry", 4: "fan" };
 const FAN_REV = Object.fromEntries(Object.entries(FAN).map(([k, v]) => [v, k]));
 
 // CommandPacketBuilder.serialize(): 25-byte header + payload.
@@ -74,7 +76,7 @@ export function toStatus(dp, prev = {}) {
   const s = { ...prev };
   if (0x01 in dp) s.power = dp[0x01] === 1;
   if (0x02 in dp) s.temp = dp[0x02];
-  if (0x04 in dp) s.mode = MODE_REV[dp[0x04]] ?? String(dp[0x04]);
+  if (0x04 in dp) s.mode = STATUS_MODE[dp[0x04]] ?? String(dp[0x04]);
   if (0x05 in dp) s.fan = FAN_REV[dp[0x05]] ?? String(dp[0x05]);
   if (0x6a in dp) s.room = dp[0x6a];
   if (0x6e in dp) s.swing = dp[0x6e] === 1;

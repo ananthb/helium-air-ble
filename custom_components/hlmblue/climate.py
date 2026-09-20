@@ -72,7 +72,8 @@ class AcClimate(CoordinatorEntity[AcCoordinator], ClimateEntity):
             connections={(CONNECTION_BLUETOOTH, coordinator.address)},
             identifiers={(DOMAIN, coordinator.address)},
             name=entry.title,
-            manufacturer="Broadcast BLE A/C",
+            manufacturer="He",
+            model="BLE A/C",
         )
 
     @property
