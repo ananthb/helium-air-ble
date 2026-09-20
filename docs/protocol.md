@@ -210,7 +210,10 @@ The AC gates control behind a **4-digit passkey**. After connecting, the app cal
 the four ASCII digits, `level[0]` = the first digit's byte. The unit answers on
 `0xB003` with **dpid `0x79`** (`passkeyAck`), and only then are `AC_CTRL` commands
 honoured. The PIN is "any 4 digits except `0000`", stored by the app under
-`@vendor_passkey_<deviceId>`.
+`@vendor_passkey_<deviceId>`. The **factory default is `0000`** — a never-paired
+or unpaired unit accepts it, and the app's unpair flow "clears passkey and name
+from both this phone and the unit", returning it to `0000`. See
+[getting a PIN](architecture.md#getting-a-pin).
 
 This resolves the earlier mystery. The seventeen framings tried before were ATT-
 acknowledged and silently ignored because **no passkey login preceded them** —

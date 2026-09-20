@@ -4,62 +4,179 @@
   "gatt": {
     "service": "0000a00a-0000-1000-8000-00805f9b34fb",
     "device_info": "0000b001-0000-1000-8000-00805f9b34fb",
-    "command":     "0000b002-0000-1000-8000-00805f9b34fb",
-    "notify":      "0000b003-0000-1000-8000-00805f9b34fb",
-    "indicate":    "0000b004-0000-1000-8000-00805f9b34fb",
+    "command": "0000b002-0000-1000-8000-00805f9b34fb",
+    "notify": "0000b003-0000-1000-8000-00805f9b34fb",
+    "indicate": "0000b004-0000-1000-8000-00805f9b34fb",
     "name_prefix": "HELM"
   },
   "frame": {
     "header": 255,
     "layout": [
-      {"off": 0,  "size": 1, "field": "header",      "enc": "u8",   "value": 255},
-      {"off": 1,  "size": 2, "field": "cmdId",       "enc": "u16be"},
-      {"off": 3,  "size": 2, "field": "len",         "enc": "u16be", "note": "payload length"},
-      {"off": 5,  "size": 2, "field": "seqNum",      "enc": "u16be", "value": 1},
-      {"off": 7,  "size": 4, "field": "checksum",    "enc": "u32be", "value": 0},
-      {"off": 11, "size": 1, "field": "total_level", "enc": "u8"},
-      {"off": 12, "size": 5, "field": "level",       "enc": "bytes", "note": "level[0] carries the AC command / dpid"},
-      {"off": 17, "size": 4, "field": "totalSize",   "enc": "u32be", "note": "= payload length"},
-      {"off": 21, "size": 4, "field": "params",      "enc": "u32be", "value": 0},
-      {"off": 25, "size": -1,"field": "payload",     "enc": "bytes"}
+      {
+        "off": 0,
+        "size": 1,
+        "field": "header",
+        "enc": "u8",
+        "value": 255
+      },
+      {
+        "off": 1,
+        "size": 2,
+        "field": "cmdId",
+        "enc": "u16be"
+      },
+      {
+        "off": 3,
+        "size": 2,
+        "field": "len",
+        "enc": "u16be",
+        "note": "payload length"
+      },
+      {
+        "off": 5,
+        "size": 2,
+        "field": "seqNum",
+        "enc": "u16be",
+        "value": 1
+      },
+      {
+        "off": 7,
+        "size": 4,
+        "field": "checksum",
+        "enc": "u32be",
+        "value": 0
+      },
+      {
+        "off": 11,
+        "size": 1,
+        "field": "total_level",
+        "enc": "u8"
+      },
+      {
+        "off": 12,
+        "size": 5,
+        "field": "level",
+        "enc": "bytes",
+        "note": "level[0] carries the AC command / dpid"
+      },
+      {
+        "off": 17,
+        "size": 4,
+        "field": "totalSize",
+        "enc": "u32be",
+        "note": "= payload length"
+      },
+      {
+        "off": 21,
+        "size": 4,
+        "field": "params",
+        "enc": "u32be",
+        "value": 0
+      },
+      {
+        "off": 25,
+        "size": -1,
+        "field": "payload",
+        "enc": "bytes"
+      }
     ]
   },
   "command_id": {
-    "FIRMWARE_UPDATE": 100, "VFS_UPDATE": 101, "SAVE_DEVICE_NAME": 103,
-    "USER_ID": 105, "FACTORY_RESET": 109, "STATUS_DATA": 500,
-    "BLE_PASSKEY": 600, "WIFI": 700, "AC_CTRL": 1003
+    "FIRMWARE_UPDATE": 100,
+    "VFS_UPDATE": 101,
+    "SAVE_DEVICE_NAME": 103,
+    "USER_ID": 105,
+    "FACTORY_RESET": 109,
+    "STATUS_DATA": 500,
+    "BLE_PASSKEY": 600,
+    "WIFI": 700,
+    "AC_CTRL": 1003
   },
   "ac_command": {
     "_note": "goes in level[0]; frame cmdId = AC_CTRL, total_level = 2, payload = value byte(s)",
-    "POWER": 0, "SPEED": 1, "TEMP": 2, "MODE": 3, "SWING": 4, "TURBO": 5,
-    "SLEEP": 6, "TIMER": 7, "CONDA": 8, "ECO": 9, "DISPLAY": 10,
-    "REMOTE_DIAG": 11, "COMPRESSOR": 12, "ODU": 13, "IDU": 14, "SAVER": 15,
-    "AD": 16, "CONVERTIBLE": 17, "OFF_TIMER": 18, "ON_TIMER": 19,
-    "SILENT": 20, "SWING_H": 21
+    "POWER": 0,
+    "SPEED": 1,
+    "TEMP": 2,
+    "MODE": 3,
+    "SWING": 4,
+    "TURBO": 5,
+    "SLEEP": 6,
+    "TIMER": 7,
+    "CONDA": 8,
+    "ECO": 9,
+    "DISPLAY": 10,
+    "REMOTE_DIAG": 11,
+    "COMPRESSOR": 12,
+    "ODU": 13,
+    "IDU": 14,
+    "SAVER": 15,
+    "AD": 16,
+    "CONVERTIBLE": 17,
+    "OFF_TIMER": 18,
+    "ON_TIMER": 19,
+    "SILENT": 20,
+    "SWING_H": 21
   },
   "values": {
-    "power": {"ON": 0, "OFF": 1},
-    "mode":  {"DRY": 0, "COOL": 1, "AUTO": 2, "FAN": 3, "HEAT": 4, "WIND": 5, "WET": 6, "CONVERTIBLE": 17},
-    "fan":   {"auto": 0, "low": 1, "medium": 2, "high": 3}
+    "power": {
+      "ON": 0,
+      "OFF": 1
+    },
+    "mode": {
+      "DRY": 0,
+      "COOL": 1,
+      "AUTO": 2,
+      "FAN": 3,
+      "HEAT": 4,
+      "WIND": 5,
+      "WET": 6,
+      "CONVERTIBLE": 17
+    },
+    "fan": {
+      "auto": 0,
+      "low": 1,
+      "medium": 2,
+      "high": 3
+    }
   },
   "status_dpid": {
-    "01": "power", "02": "temperature", "04": "mode", "05": "fan_speed",
-    "19": "sleep", "1c": "power_draw_w", "67": "turbo", "69": "silent",
-    "6a": "room_temp", "6d": "display", "6e": "swing_v", "6f": "swing_h",
+    "01": "power",
+    "02": "temperature",
+    "04": "mode",
+    "05": "fan_speed",
+    "19": "sleep",
+    "1c": "power_draw_w",
+    "67": "turbo",
+    "69": "silent",
+    "6a": "room_temp",
+    "6d": "display",
+    "6e": "swing_v",
+    "6f": "swing_h",
     "79": "passkey_ack"
   },
   "status_frame": {
     "_note": "0xB003 notify, ASCII-hex, one or more '55aa'-delimited units",
     "delimiter": "55aa",
-    "dpid_hex_slice": [12, 14],
-    "len_hex_slice": [16, 20],
+    "dpid_hex_slice": [
+      12,
+      14
+    ],
+    "len_hex_slice": [
+      16,
+      20
+    ],
     "data_hex_start": 20
   },
   "passkey": {
-    "cmdId": 600, "total_level": 1, "digits": 4, "forbidden": "0000",
-    "payload": "4 ASCII digits", "level0": "first digit byte",
+    "cmdId": 600,
+    "total_level": 1,
+    "digits": 4,
+    "forbidden": "0000",
+    "payload": "4 ASCII digits",
+    "level0": "first digit byte",
     "ack_dpid": "79",
     "storage_key": "@vendor_passkey_<deviceId>",
-    "note": "sent after connect (sendLoginBlePasskey) before control is accepted"
+    "note": "factory default is 0000; app forces a user-chosen 4-digit PIN on first pairing (sendInitialBlePasskey). Sent after connect (sendLoginBlePasskey) before control is accepted.",
+    "default_pin": "0000"
   }
 }
