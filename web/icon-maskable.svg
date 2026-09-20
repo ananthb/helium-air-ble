@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="He A/C">
+  <rect width="512" height="512" fill="#0e1620"/>
+  <rect x="112" y="120" width="288" height="34" rx="17" fill="#16a06f"/>
+  <text x="256" y="262" text-anchor="middle" dominant-baseline="central"
+        font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="240" font-weight="800" fill="#eef5f0">He</text>
+  <rect x="112" y="358" width="288" height="34" rx="17" fill="#16a06f"/>
+</svg>

@@ -1,6 +1,6 @@
 {
-  "name": "A/C Remote",
-  "short_name": "A/C",
+  "name": "He A/C Remote",
+  "short_name": "He A/C",
   "description": "Bluetooth A/C remote — controls the air conditioner directly over BLE, no cloud.",
   "start_url": "./",
   "scope": "./",
