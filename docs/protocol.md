@@ -175,33 +175,58 @@ FAN HIGH    ff03eb 0001 0001 00000000 02 0100000000 00000001 00000000 03
 (Spaces added for reading only.) A reference encoder/decoder is in
 [`../tools/ac_frames.js`](../tools/ac_frames.js).
 
-### Status: the `0xB003` notify stream
+### Status: the `0xB003` notify stream  (verified live)
 
-Status comes back as an **ASCII-hex string**, one or more units delimited by
-`55aa` (the classic Tuya datapoint header — the AC's BLE module is Tuya-derived).
-Per unit, after the `55aa`:
+Status was captured from a live unit through an ESPHome proxy — see
+[`../tools/read_status.py`](../tools/read_status.py). Two things the app's code
+did not make obvious, both of which cost the earlier "the unit answers nothing"
+conclusion:
+
+- **The CCCDs must be written explicitly.** Enabling notifications through a
+  generic `start_notify` did *not* enable them here; writing `0x0100` to the
+  `0xB003` CCCD (handle 20) and `0x0200` to the `0xB004` CCCD (handle 23) does.
+  Until then the unit streams nothing, which is exactly why 75 s of an earlier
+  session sat silent.
+- **The stream is poked by a write.** After the CCCDs are live, a write to
+  `0xB002` (a `STATUS_DATA` request works) triggers the unit to dump its state.
+
+Each notification's **value is ASCII text**, not raw bytes:
 
 ```
-hex chars  12–13   dpid        (1 byte)
-hex chars  14–15   type        (1 byte)
-hex chars  16–19   length      (2 bytes BE, in bytes)
-hex chars  20…     data        (length bytes)
+Poll:1160:55aa03070005 01 01 0001 00 11
+Diag:1171:->100149c4 1
 ```
 
-Status DPIDs the app decodes (`parsePollPayload`):
+`Poll:<seq>:<hexframe>` carries state; `Diag:<seq>:…` carries diagnostics. The
+`<hexframe>` is a **standard Tuya datapoint frame**:
+
+```
+55aa            header
+03              version
+07              command (0x07 = status report)
+00 XX           length of the body, 2 bytes BE
+  <dp unit>…    one or more datapoints
+XX              checksum (sum of the preceding bytes, mod 256)
+```
+
+Each datapoint unit is `dpid(1) · type(1) · len(2 BE) · value(len)` — Tuya's
+`0x01` bool, `0x02` 4-byte int, `0x04` enum. DPIDs seen on a live unit:
 
 | dpid | meaning | dpid | meaning |
 |---|---|---|---|
-| `0x01` | power | `0x69` | silent |
-| `0x02` | temperature (°C) | `0x6A` | room temperature |
-| `0x04` | mode | `0x6D` | display |
-| `0x05` | fan speed | `0x6E` | swing vertical |
+| `0x01` | power (`0`=on, `1`=off) | `0x69` | silent |
+| `0x02` | temperature setpoint °C | `0x6A` | room temperature °C |
+| `0x04` | mode (enum, as above) | `0x6B` | coil temp *(inferred)* |
+| `0x05` | fan speed (enum) | `0x6D` | display |
+| `0x08` | eco *(inferred)* | `0x6E` | swing vertical |
 | `0x19` | sleep | `0x6F` | swing horizontal |
-| `0x1C` | **power draw (W)** | `0x79` | passkey ack |
-| `0x67` | turbo | | |
+| `0x1A` | health/ionizer *(inferred)* | `0x73` | defrost *(inferred)* |
+| `0x1C` | **power draw (W)** | `0x75` | error/fault *(inferred)* |
+| `0x67` | turbo | `0x79` | passkey ack |
 
-`0x1C` is a live wattage report — the same signal we were reading indirectly off
-the metered socket.
+A live read while the unit was running returned: power **on**, mode **cool**,
+setpoint **22 °C**, fan **auto**, room **31 °C**, display on, swing-H on. Reading
+status required **no PIN** — the passkey gate is on control, not on observation.
 
 ### The passkey handshake — why blind writes did nothing
 
@@ -220,14 +245,14 @@ acknowledged and silently ignored because **no passkey login preceded them** —
 and because none matched the real `AC_CTRL` layout above. Both problems are now
 fixed on paper; the open item is obtaining the actual PIN a given unit expects.
 
-## Verifying against a real unit
+## Status verified; control not yet
 
-Nothing here has yet been written to a live AC. The safe first test is read-only:
-send `STATUS_DATA` (500, empty payload) and watch `0xB003`, or subscribe and wait
-for the unit's own periodic poll, then check the decode against
-[`../tools/ac_frames.js`](../tools/ac_frames.js). A control test
-(`POWER`, `TEMP`) turns the physical AC on/off, so it belongs to whoever is in the
-room with it and knows the PIN.
+The read path above is confirmed against a live unit through the ESPHome proxy.
+Control frames (`docs`/[`../tools/ac_frames.js`](../tools/ac_frames.js))
+are byte-derived from the app but have **not** been written to a physical AC —
+that turns the compressor on/off and needs the unit's passkey. The safe, already-
+done step is the read; the next is a single `AC_CTRL` write behind a passkey
+login, confirmed via the `0x1C` power-draw datapoint and the metered socket.
 
 ## Reaching the unit through an ESPHome proxy
 

@@ -12,8 +12,10 @@ things get built:
 
 ## Status
 
-- **Protocol — decoded.** Frame format, command set, value encodings, status
-  stream, and the passkey handshake are all mapped from the app's own serializer.
+- **Protocol — decoded and the read path verified live.** Frame format, command
+  set, value encodings, status stream and the passkey handshake are mapped from
+  the app's serializer; status was then confirmed against a real unit through an
+  ESPHome proxy (power/mode/setpoint/fan/room-temp all decode correctly).
   See [`docs/protocol.md`](docs/protocol.md), with a runnable reference codec in
   [`tools/ac_frames.js`](tools/ac_frames.js) and golden frames in
   [`proto/vectors.json`](proto/vectors.json).

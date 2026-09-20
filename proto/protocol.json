@@ -152,20 +152,18 @@
     "6d": "display",
     "6e": "swing_v",
     "6f": "swing_h",
-    "79": "passkey_ack"
+    "79": "passkey_ack",
+    "08": "eco",
+    "1a": "health",
+    "6b": "coil_temp",
+    "73": "defrost",
+    "75": "error"
   },
   "status_frame": {
-    "_note": "0xB003 notify, ASCII-hex, one or more '55aa'-delimited units",
-    "delimiter": "55aa",
-    "dpid_hex_slice": [
-      12,
-      14
-    ],
-    "len_hex_slice": [
-      16,
-      20
-    ],
-    "data_hex_start": 20
+    "_note": "0xB003 notify VALUE is ASCII text 'Poll:<seq>:<hexframe>' (or 'Diag:<seq>:...'). CCCDs must be written explicitly (0100 on B003, 0200 on B004); stream is poked by a write to 0xB002. Verified live.",
+    "wrapper": "Poll:<seq>:<hexframe>",
+    "hexframe": "standard Tuya: 55aa | ver(03) | cmd(07) | len(2 BE) | dp-units | checksum(1)",
+    "dp_unit": "dpid(1) type(1) len(2 BE) value(len)"
   },
   "passkey": {
     "cmdId": 600,
@@ -178,5 +176,6 @@
     "storage_key": "@vendor_passkey_<deviceId>",
     "note": "factory default is 0000; app forces a user-chosen 4-digit PIN on first pairing (sendInitialBlePasskey). Sent after connect (sendLoginBlePasskey) before control is accepted.",
     "default_pin": "0000"
-  }
+  },
+  "_verified": "Read path confirmed live via ESPHome proxy: power on, mode cool, setpoint 22C, fan auto, room 31C. Status needs no PIN."
 }
