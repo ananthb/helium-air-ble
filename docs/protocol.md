@@ -84,74 +84,153 @@ cheapest experiment anyone with physical access can run: read `0xB001`, change t
 temperature with the IR remote, read it again, and diff. If those bytes track the
 unit, there is a read path even before the command format is known.
 
-## What has been tried and does not work
 
-Both CCCDs were verified enabled by descriptor readback — `0100` on `0xB003`
-(notify) and `0200` on `0xB004` (indicate). This matters: a generic
-`start_notify()` writes `0100`, which never enables an indicate-only
-characteristic, so an early negative result there was a false one.
+## The protocol (decoded from the app)
 
-With both streams confirmed live, these 17 payloads were written to `0xB002`:
+Everything below was transcribed from the **the vendor app** app itself —
+`com.vendor.mobileapp` 1.0.1, a React Native / Expo build whose logic ships as a
+bytecode bytecode bundle. See [`the docs`](the docs) for how to reproduce
+the extraction; the exact function names cited here are the app's own.
+
+The app speaks the **same command vocabulary over two transports**:
+
+- **BLE** — GATT writes to `0xB002`, notifications on `0xB003`. This is the local
+  path and the one this project targets.
+- **Cloud** — AWS IoT MQTT (the app ships `AWSiOT.p12` + `AmazonRootCA1.pem`).
+  This is how the app does *remote* control once the AC is Wi-Fi provisioned
+  (`command_id.WIFI = 700`). Out of scope here, but it explains how the app shows
+  and controls a unit you are nowhere near.
+
+### The BLE frame
+
+Every BLE write is one `CommandPacketBuilder.serialize()` structure — a fixed
+25-byte header followed by a variable payload, written to `0xB002` as the raw
+bytes (the app base64-encodes them only because `react-native-ble-plx` takes
+base64; over a GATT write the bytes are what land).
 
 ```
-<>            <?>           <STATUS>      <QUERY>       <aaaa>
-01 00         01 00 7a 01   7a 01 00 00   aa 00 00      aa 01 00 00
-{"cmd":"get"} {"cmd":"status"}            00            01
+off  size  field         encoding   notes
+ 0    1    header        u8         always 0xFF
+ 1    2    cmdId         u16 BE     see command_id
+ 3    2    len           u16 BE     payload length
+ 5    2    seqNum        u16 BE     app always sends 1
+ 7    4    checksum      u32 BE     app always sends 0 (not validated by the unit)
+11    1    total_level   u8         2 for AC control, 1 for passkey
+12    5    level         bytes      level[0] carries the command / dpid; rest 0
+17    4    totalSize     u32 BE     = payload length
+21    4    params        u32 BE     0
+25    …    payload       bytes      value bytes
 ```
 
-**Every one was acknowledged at the ATT layer. Not one produced a single byte on
-`0xB003` or `0xB004`.** ATT acknowledgement only means the write reached the
-characteristic, not that the payload parsed — so this rules nothing out except
-these exact framings.
+`command_id` (from the app's map):
 
-Power draw on the AC's metered socket did not move (1.48 W → 1.63 W, both
-standby), so none of them was accidentally a valid command either.
+| name | value | | name | value |
+|---|---|---|---|---|
+| `FIRMWARE_UPDATE` | 100 | | `STATUS_DATA` | 500 |
+| `VFS_UPDATE` | 101 | | `BLE_PASSKEY` | 600 |
+| `SAVE_DEVICE_NAME` | 103 | | `WIFI` | 700 |
+| `USER_ID` | 105 | | **`AC_CTRL`** | **1003** (`0x03EB`) |
+| `FACTORY_RESET` | 109 | | | |
 
-The unit also pushes nothing unsolicited: 75 s connected with both streams enabled
-produced silence. It is request/response, and no request has been recognised yet.
+### AC control
 
-## Cracking it
+An AC command is an `AC_CTRL` (1003) frame with `total_level = 2`, the command in
+`level[0]`, and the value in the payload. This is exactly what the app's
+`sendACCommand(cmd, valueBytes)` does, and the typed setters (`setPower`,
+`setTemperature`, `setMode`, `setFanSpeed`, `setSwing`) are thin wrappers over it.
 
-The remaining unknown is the framing, and guessing has a search space too large to
-brute force. Two approaches that would settle it, both requiring someone with the
-app and the unit:
+`level[0]` — the command index:
 
-### Android HCI snoop log
+| cmd | `level[0]` | payload | cmd | `level[0]` | payload |
+|---|---|---|---|---|---|
+| POWER | 0 | `[on?0:1]` | DISPLAY | 10 | `[on?0:1]` |
+| SPEED (fan) | 1 | `[0-3]` | REMOTE_DIAG | 11 | `[0]` |
+| TEMP | 2 | `[°C]` | COMPRESSOR | 12 | |
+| MODE | 3 | `[mode]` | ODU | 13 | |
+| SWING (V) | 4 | `[on?..]` | IDU | 14 | |
+| TURBO | 5 | | CONVERTIBLE | 17 | `[val]` |
+| SLEEP | 6 | | OFF_TIMER | 18 | `[minBE]` |
+| TIMER | 7 | | ON_TIMER | 19 | `[minBE]` |
+| CONDA | 8 | | SILENT | 20 | `[on?1:0]` |
+| ECO | 9 | | SWING_H | 21 | `[0,on?1:0]` |
 
-Records the real frames the app sends. Better than decompiling the APK, because it
-yields bytes that are known to work rather than inferred ones.
+Value encodings:
 
-1. Settings → About phone → tap **Build number** seven times.
-2. Developer options → **Enable Bluetooth HCI snoop log** → Enabled (Full).
-3. Toggle Bluetooth off and on so the log starts clean.
-4. In the vendor app, run a short deliberate sequence and write down the order:
-   power on, wait 10 s, set temperature to exactly 24, set mode to Cool, power off.
-5. Developer options → **Bug report**, or `adb bugreport out.zip`. The log is at
-   `FS/data/misc/bluetooth/logs/btsnoop_hci.log` inside it.
+- **power** — `ON = 0`, `OFF = 1` (`AC_CMD_ON`/`AC_CMD_OFF`; note ON is 0).
+- **mode** — `DRY 0 · COOL 1 · AUTO 2 · FAN 3 · HEAT 4 · WIND 5 · WET 6 · CONVERTIBLE 17`.
+- **fan** — `auto 0 · low 1 · medium 2 · high 3`.
+- **temperature** — one byte of °C.
 
-Line the writes to the command characteristic up against the noted sequence and
-the encoding falls out.
+Worked frames (hex, byte-for-byte from the app's serializer; the full set is in
+[`../proto/vectors.json`](../proto/vectors.json)):
 
-### Impersonate the AC
+```
+POWER ON    ff03eb 0001 0001 00000000 02 0000000000 00000001 00000000 00
+POWER OFF   ff03eb 0001 0001 00000000 02 0000000000 00000001 00000000 01
+TEMP 24 °C  ff03eb 0001 0001 00000000 02 0200000000 00000001 00000000 18
+MODE COOL   ff03eb 0001 0001 00000000 02 0300000000 00000001 00000000 01
+FAN HIGH    ff03eb 0001 0001 00000000 02 0100000000 00000001 00000000 03
+```
 
-Advertise a clone — same name, same `0xA00A` service, same four characteristics,
-serving the `0xB001` blob above — from a Linux box with a BLE adapter, and let the
-app connect to it. Every byte the app writes gets logged, with no root and no
-developer options.
+(Spaces added for reading only.) A reference encoder/decoder is in
+[`../tools/ac_frames.js`](../tools/ac_frames.js).
 
-This has a second benefit: forward those writes over the network to a real AC
-elsewhere and relay the responses back, and the app controls a unit it is nowhere
-near. That is also the practical answer to "can I use the app remotely", since
-Android offers no supported way to tunnel its own Bluetooth stack.
+### Status: the `0xB003` notify stream
 
-Note the app may do more than read `0xB001` — a bond, or a challenge using the
-`aaaa` field. Even then the opening frames are captured, which is the useful part.
+Status comes back as an **ASCII-hex string**, one or more units delimited by
+`55aa` (the classic Tuya datapoint header — the AC's BLE module is Tuya-derived).
+Per unit, after the `55aa`:
+
+```
+hex chars  12–13   dpid        (1 byte)
+hex chars  14–15   type        (1 byte)
+hex chars  16–19   length      (2 bytes BE, in bytes)
+hex chars  20…     data        (length bytes)
+```
+
+Status DPIDs the app decodes (`parsePollPayload`):
+
+| dpid | meaning | dpid | meaning |
+|---|---|---|---|
+| `0x01` | power | `0x69` | silent |
+| `0x02` | temperature (°C) | `0x6A` | room temperature |
+| `0x04` | mode | `0x6D` | display |
+| `0x05` | fan speed | `0x6E` | swing vertical |
+| `0x19` | sleep | `0x6F` | swing horizontal |
+| `0x1C` | **power draw (W)** | `0x79` | passkey ack |
+| `0x67` | turbo | | |
+
+`0x1C` is a live wattage report — the same signal we were reading indirectly off
+the metered socket.
+
+### The passkey handshake — why blind writes did nothing
+
+The AC gates control behind a **4-digit passkey**. After connecting, the app calls
+`sendLoginBlePasskey`: a `BLE_PASSKEY` (600) frame, `total_level = 1`, payload =
+the four ASCII digits, `level[0]` = the first digit's byte. The unit answers on
+`0xB003` with **dpid `0x79`** (`passkeyAck`), and only then are `AC_CTRL` commands
+honoured. The PIN is "any 4 digits except `0000`", stored by the app under
+`@vendor_passkey_<deviceId>`.
+
+This resolves the earlier mystery. The seventeen framings tried before were ATT-
+acknowledged and silently ignored because **no passkey login preceded them** —
+and because none matched the real `AC_CTRL` layout above. Both problems are now
+fixed on paper; the open item is obtaining the actual PIN a given unit expects.
+
+## Verifying against a real unit
+
+Nothing here has yet been written to a live AC. The safe first test is read-only:
+send `STATUS_DATA` (500, empty payload) and watch `0xB003`, or subscribe and wait
+for the unit's own periodic poll, then check the decode against
+[`../tools/ac_frames.js`](../tools/ac_frames.js). A control test
+(`POWER`, `TEMP`) turns the physical AC on/off, so it belongs to whoever is in the
+room with it and knows the PIN.
 
 ## Reaching the unit through an ESPHome proxy
 
 You do not need a radio in the same room. An ESP32 running
 [`bluetooth_proxy`](https://esphome.io/components/bluetooth_proxy.html) works as a
-remote GATT client via `aioesphomeapi` — this is how everything above was
+remote GATT client via `aioesphomeapi` — this is how the GATT map above was
 captured. See [`../tools/dump_gatt.py`](../tools/dump_gatt.py).
 
 Two traps cost real time, and neither is documented upstream:
