@@ -1,0 +1,23 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "description": "Pick the A/C to control.",
+        "data": { "address": "A/C" }
+      },
+      "confirm": {
+        "title": "Set up {name}",
+        "description": "Enter the 4-digit passkey for this A/C (the default is 0000).",
+        "data": { "pin": "Passkey" }
+      }
+    },
+    "abort": {
+      "no_devices_found": "No A/Cs found. Make sure the A/C is powered and in range of a Bluetooth adapter or an ESPHome Bluetooth proxy.",
+      "already_configured": "This A/C is already set up."
+    }
+  },
+  "entity": {
+    "sensor": { "power_draw": { "name": "Power draw" } }
+  }
+}

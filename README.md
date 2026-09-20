@@ -55,6 +55,22 @@ If your unit reports a different model string, please open an issue with the
 output of [`tools/dump_gatt.py`](tools/dump_gatt.py) — and, if you can capture it,
 the passkey exchange — so we can tell whether the protocol is shared across models.
 
+## Home Assistant
+
+A custom integration in `custom_components/hlmblue/` exposes the A/C as a
+`climate` entity (plus a power-draw sensor). It uses Home Assistant's Bluetooth
+stack, so it reaches the A/C through an ESPHome Bluetooth proxy — the A/C need not
+be near the HA host.
+
+Install via [HACS](https://hacs.xyz): add this repo as a custom repository
+(category *Integration*), install it, restart, then add **A/C Remote (BLE)** from
+Settings → Devices & Services. It discovers `HELM…` units over Bluetooth; enter
+the 4-digit passkey (default `0000`) when prompted.
+
+The codec (`custom_components/hlmblue/protocol.py`) is the same wire format as the
+web app, checked against [`proto/vectors.json`](proto/vectors.json) by
+[`tests/test_protocol.py`](tests/test_protocol.py).
+
 ## Licence
 
 GPL-3.0-only. See [`LICENSE`](LICENSE).
