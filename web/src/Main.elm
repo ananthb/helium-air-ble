@@ -43,8 +43,6 @@ type alias Status =
     , temp : Int
     , mode : String
     , fan : String
-    , swing : Bool
-    , swingH : Bool
     , room : Int
     , watts : Int
     }
@@ -58,6 +56,8 @@ type alias Model =
     { conn : Conn
     , status : Status
     , timerMin : Int
+    , swingV : Bool
+    , swingH : Bool
     , device : Maybe String
     , currentId : Maybe String
     , devices : List Dev
@@ -87,8 +87,10 @@ fans =
 init : () -> ( Model, Cmd Msg )
 init _ =
     ( { conn = Disconnected
-      , status = Status False 24 "cool" "auto" False False 0 0
+      , status = Status False 24 "cool" "auto" 0 0
       , timerMin = 0
+      , swingV = False
+      , swingH = False
       , device = Nothing
       , currentId = Nothing
       , devices = []
@@ -235,10 +237,12 @@ userUpdate msg model =
             ( model, intent [ ( "kind", E.string "setFan" ), ( "value", E.string (next fans st.fan) ) ] )
 
         SetSwing on ->
-            ( model, intent [ ( "kind", E.string "setSwing" ), ( "on", E.bool on ) ] )
+            -- Optimistic: the unit's swing read-back doesn't map cleanly to the
+            -- axes, so track what we set rather than trusting decoded status.
+            ( { model | swingV = on }, intent [ ( "kind", E.string "setSwing" ), ( "on", E.bool on ) ] )
 
         SetSwingH on ->
-            ( model, intent [ ( "kind", E.string "setSwingH" ), ( "on", E.bool on ) ] )
+            ( { model | swingH = on }, intent [ ( "kind", E.string "setSwingH" ), ( "on", E.bool on ) ] )
 
         CycleTimer ->
             let
@@ -375,13 +379,11 @@ connFromString s =
 
 statusDecoder : D.Decoder Status
 statusDecoder =
-    D.map8 Status
+    D.map6 Status
         (D.field "power" D.bool)
         (D.field "temp" D.int)
         (D.field "mode" D.string)
         (D.field "fan" D.string)
-        (D.oneOf [ D.field "swing" D.bool, D.succeed False ])
-        (D.oneOf [ D.field "swing_h" D.bool, D.succeed False ])
         (D.field "room" D.int)
         (D.field "watts" D.int)
 
@@ -541,7 +543,7 @@ viewLcd backlight model =
     div [ classList [ ( "lcd", True ), ( "dark", not backlight ) ] ] <|
         case model.conn of
             Ready ->
-                viewReadout model.status
+                viewReadout model.swingV model.swingH model.status
 
             NeedPin ->
                 placeholder "UNLOCKING"
@@ -553,8 +555,8 @@ viewLcd backlight model =
                 placeholder "OFFLINE"
 
 
-viewReadout : Status -> List (Html Msg)
-viewReadout st =
+viewReadout : Bool -> Bool -> Status -> List (Html Msg)
+viewReadout swingV swingH st =
     [ div [ class "lcd-top" ]
         [ span [ classList [ ( "seg", True ), ( "on", st.power ) ] ] [ text (String.toUpper st.mode) ]
         , span [ class "room" ] [ text ("IN " ++ String.fromInt st.room ++ "°") ]
@@ -565,7 +567,7 @@ viewReadout st =
         ]
     , div [ class "lcd-bot" ]
         [ span [ class "field" ] [ label_ "FAN", fanBars st.fan ]
-        , span [ classList [ ( "field", True ), ( "on", st.swing || st.swingH ) ] ] [ text (swingText st) ]
+        , span [ classList [ ( "field", True ), ( "on", swingV || swingH ) ] ] [ text (swingText swingV swingH) ]
         , span [ class "field watts" ] [ text (wattsText st) ]
         ]
     ]
@@ -591,9 +593,9 @@ wattsText st =
         "STANDBY"
 
 
-swingText : Status -> String
-swingText st =
-    case ( st.swing, st.swingH ) of
+swingText : Bool -> Bool -> String
+swingText swingV swingH =
+    case ( swingV, swingH ) of
         ( True, True ) ->
             "SWING ↕↔"
 
@@ -695,8 +697,8 @@ viewPad model =
                     ]
                 , button [ class "btn", onClick CycleMode ] [ glyph (modeGlyph st.mode), small "MODE" ]
                 , button [ class "btn", onClick CycleFan ] [ glyph "❋", small "FAN" ]
-                , button [ classList [ ( "btn", True ), ( "on", st.swing ) ], onClick (SetSwing (not st.swing)) ] [ glyph "↕", small "SWING" ]
-                , button [ classList [ ( "btn", True ), ( "on", st.swingH ) ], onClick (SetSwingH (not st.swingH)) ] [ glyph "↔", small "SWING H" ]
+                , button [ classList [ ( "btn", True ), ( "on", model.swingV ) ], onClick (SetSwing (not model.swingV)) ] [ glyph "↕", small "SWING" ]
+                , button [ classList [ ( "btn", True ), ( "on", model.swingH ) ], onClick (SetSwingH (not model.swingH)) ] [ glyph "↔", small "SWING H" ]
                 , button [ classList [ ( "btn", True ), ( "on", model.timerMin > 0 ) ], onClick CycleTimer ] [ glyph "⏱", small (timerLabel model.timerMin st.power) ]
                 , button [ class "btn ghost", onClick Disconnect ] [ glyph "⏏", small "EXIT" ]
                 ]
