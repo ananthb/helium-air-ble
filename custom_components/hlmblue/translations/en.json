@@ -10,11 +10,14 @@
       },
       "confirm": {
         "title": "Set up {name}",
-        "description": "Enter the 4-digit passkey for this A/C (the default is 0000).",
+        "description": "Leave the passkey blank and a random one is generated and set on this A/C automatically. Fill it in only if this A/C already has a passkey — it will be used as-is. You can view or change it later from the A/C's Passkey controls.",
         "data": {
-          "pin": "Passkey"
+          "pin": "Existing passkey (optional)"
         }
       }
+    },
+    "error": {
+      "invalid_pin": "The passkey must be exactly 4 digits."
     },
     "abort": {
       "no_devices_found": "No A/Cs found. Make sure the A/C is powered and in range of a Bluetooth adapter or an ESPHome Bluetooth proxy.",

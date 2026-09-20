@@ -12,7 +12,7 @@ from homeassistant.components.bluetooth import (
 )
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 
-from .const import CONF_ADDRESS, CONF_PIN, DEFAULT_PIN, DOMAIN
+from .const import CONF_ADDRESS, CONF_CONFIGURED, CONF_PIN, DEFAULT_PIN, DOMAIN
 from .protocol import NAME_PREFIX
 
 
@@ -40,15 +40,33 @@ class AcConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_confirm(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Confirm a discovered device and take its passkey."""
+        """Confirm a discovered device.
+
+        Leave the passkey blank and a random one is generated and set on the A/C.
+        Fill it in only if the A/C already has a non-default passkey — that one is
+        used as-is and left unchanged.
+        """
+        errors: dict[str, str] = {}
         if user_input is not None:
-            return self.async_create_entry(
-                title=self._name or self._address,
-                data={CONF_ADDRESS: self._address, CONF_PIN: user_input[CONF_PIN]},
-            )
+            pin = (user_input.get(CONF_PIN) or "").strip()
+            if pin and not (len(pin) == 4 and pin.isdigit()):
+                errors["base"] = "invalid_pin"
+            else:
+                data: dict[str, Any] = {CONF_ADDRESS: self._address}
+                if pin:
+                    # A known, already-set passkey: use it and don't overwrite it.
+                    data[CONF_PIN] = pin
+                    data[CONF_CONFIGURED] = True
+                else:
+                    # Blank: generate and set a random passkey on first setup.
+                    data[CONF_PIN] = DEFAULT_PIN
+                return self.async_create_entry(
+                    title=self._name or self._address, data=data
+                )
         return self.async_show_form(
             step_id="confirm",
-            data_schema=vol.Schema({vol.Required(CONF_PIN, default=DEFAULT_PIN): str}),
+            data_schema=vol.Schema({vol.Optional(CONF_PIN, default=""): str}),
+            errors=errors,
             description_placeholders={"name": self._name or self._address or ""},
         )
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1
+
+- Adding an A/C no longer prompts for a passkey by default — a random one is
+  generated and set on the unit automatically, matching the web app. The passkey
+  field is now optional, for the case where an A/C already has one you know.
+
 ## 0.1.0
 
 First release.
