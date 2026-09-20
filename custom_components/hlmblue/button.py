@@ -17,12 +17,11 @@ from .coordinator import AcCoordinator
 
 async def async_setup_entry(hass, entry: AcConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     c = entry.runtime_data
+    # Both passkey buttons are rarely-used admin actions; hide them from the UI by
+    # default so they don't clutter dashboards (unhide in the entity settings).
     async_add_entities(
         [
-            AcButton(c, entry, "new_passkey", lambda: c.async_set_passkey(p.random_pin())),
-            # Reset is a rarely-used recovery action; hide it from the UI by
-            # default so it doesn't clutter dashboards (unhide it in the entity
-            # settings if you need it).
+            AcButton(c, entry, "new_passkey", lambda: c.async_set_passkey(p.random_pin()), visible=False),
             AcButton(c, entry, "reset_passkey", c.async_reset_passkey, visible=False),
         ]
     )

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.3
+
+- The "New random passkey" button is now hidden by default too, so neither
+  passkey button clutters dashboards — unhide from the entity settings if needed.
+
 ## 0.2.2
 
 - The "Reset passkey to 0000" button is now hidden by default so it doesn't
