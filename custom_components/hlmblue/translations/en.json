@@ -35,6 +35,14 @@
         "name": "Passkey"
       }
     },
+    "number": {
+      "off_timer": {
+        "name": "Auto-off timer"
+      },
+      "on_timer": {
+        "name": "Auto-on timer"
+      }
+    },
     "button": {
       "new_passkey": {
         "name": "New random passkey"

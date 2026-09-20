@@ -27,7 +27,10 @@ AC_POWER = 0
 AC_SPEED = 1
 AC_TEMP = 2
 AC_MODE = 3
-AC_SWING = 4
+AC_SWING = 4  # vertical swing
+AC_OFF_TIMER = 18
+AC_ON_TIMER = 19
+AC_SWING_H = 21  # horizontal swing
 
 POWER_ON = 0
 POWER_OFF = 1
@@ -45,6 +48,7 @@ DP_MODE = 0x04
 DP_FAN = 0x05
 DP_POWER_W = 0x1C
 DP_SWING_V = 0x6E
+DP_SWING_H = 0x6F
 DP_ROOM_TEMP = 0x6A
 DP_PASSKEY_ACK = 0x79
 
@@ -69,6 +73,10 @@ def serialize(cmd_id: int, payload: bytes = b"", *, total_level: int = 0, level0
 
 def _ac(ac_cmd: int, value: int) -> bytes:
     return serialize(CMD_AC_CTRL, bytes([value & 0xFF]), total_level=2, level0=ac_cmd)
+
+
+def _ac_bytes(ac_cmd: int, payload: bytes) -> bytes:
+    return serialize(CMD_AC_CTRL, payload, total_level=2, level0=ac_cmd)
 
 
 def frame_login(pin: str) -> bytes:
@@ -97,7 +105,23 @@ def frame_fan(fan: str) -> bytes:
 
 
 def frame_swing(on: bool) -> bytes:
+    """Vertical swing."""
     return _ac(AC_SWING, 1 if on else 0)
+
+
+def frame_swing_h(on: bool) -> bytes:
+    """Horizontal swing (2-byte payload: [0, on?1:0])."""
+    return _ac_bytes(AC_SWING_H, bytes([0, 1 if on else 0]))
+
+
+def frame_off_timer(minutes: int) -> bytes:
+    """Auto-off after `minutes` (0 cancels). Payload is u32 BE minutes."""
+    return _ac_bytes(AC_OFF_TIMER, max(0, int(minutes)).to_bytes(4, "big"))
+
+
+def frame_on_timer(minutes: int) -> bytes:
+    """Auto-on after `minutes` (0 cancels). Payload is u32 BE minutes."""
+    return _ac_bytes(AC_ON_TIMER, max(0, int(minutes)).to_bytes(4, "big"))
 
 
 def decode_notify(raw: bytes) -> dict[int, int | None]:

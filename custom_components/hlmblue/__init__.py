@@ -14,7 +14,7 @@ from .coordinator import AcCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = [Platform.CLIMATE, Platform.SENSOR, Platform.TEXT, Platform.BUTTON]
+PLATFORMS = [Platform.CLIMATE, Platform.SENSOR, Platform.TEXT, Platform.BUTTON, Platform.NUMBER]
 
 type AcConfigEntry = ConfigEntry[AcCoordinator]
 

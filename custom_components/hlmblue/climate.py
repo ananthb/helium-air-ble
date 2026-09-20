@@ -7,6 +7,8 @@ from homeassistant.components.climate import (
     FAN_HIGH,
     FAN_LOW,
     FAN_MEDIUM,
+    SWING_BOTH,
+    SWING_HORIZONTAL,
     SWING_OFF,
     SWING_VERTICAL,
     ClimateEntity,
@@ -56,7 +58,7 @@ class AcClimate(CoordinatorEntity[AcCoordinator], ClimateEntity):
         HVACMode.HEAT,
     ]
     _attr_fan_modes = [FAN_AUTO, FAN_LOW, FAN_MEDIUM, FAN_HIGH]
-    _attr_swing_modes = [SWING_OFF, SWING_VERTICAL]
+    _attr_swing_modes = [SWING_OFF, SWING_VERTICAL, SWING_HORIZONTAL, SWING_BOTH]
     _attr_supported_features = (
         ClimateEntityFeature.TARGET_TEMPERATURE
         | ClimateEntityFeature.FAN_MODE
@@ -119,7 +121,14 @@ class AcClimate(CoordinatorEntity[AcCoordinator], ClimateEntity):
 
     @property
     def swing_mode(self) -> str:
-        return SWING_VERTICAL if self._d.get("swing") else SWING_OFF
+        v, h = self._d.get("swing"), self._d.get("swing_h")
+        if v and h:
+            return SWING_BOTH
+        if v:
+            return SWING_VERTICAL
+        if h:
+            return SWING_HORIZONTAL
+        return SWING_OFF
 
     async def async_set_temperature(self, **kwargs) -> None:
         temp = kwargs.get(ATTR_TEMPERATURE)
@@ -139,7 +148,10 @@ class AcClimate(CoordinatorEntity[AcCoordinator], ClimateEntity):
         await self.coordinator.async_command(p.frame_fan(fan_mode))
 
     async def async_set_swing_mode(self, swing_mode: str) -> None:
-        await self.coordinator.async_command(p.frame_swing(swing_mode == SWING_VERTICAL))
+        want_v = swing_mode in (SWING_VERTICAL, SWING_BOTH)
+        want_h = swing_mode in (SWING_HORIZONTAL, SWING_BOTH)
+        await self.coordinator.async_command(p.frame_swing(want_v))
+        await self.coordinator.async_command(p.frame_swing_h(want_h))
 
     async def async_turn_on(self) -> None:
         await self.coordinator.async_command(p.frame_power(True), power=True)

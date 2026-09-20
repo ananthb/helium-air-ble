@@ -1,19 +1,9 @@
 # Changelog
 
-## 0.1.1
+## 0.2.0
 
-- Adding an A/C no longer prompts for a passkey by default — a random one is
-  generated and set on the unit automatically, matching the web app. The passkey
-  field is now optional, for the case where an A/C already has one you know.
-
-## 0.1.0
-
-First release.
-
-- Control a broadcast BLE air conditioner from Home Assistant as a `climate`
-  entity — power, mode, target temperature, fan and swing — with a power-draw
-  sensor. It works through an ESPHome Bluetooth proxy, so the A/C need not be
-  near the Home Assistant host.
-- Passkey handling: a random passkey is configured on the A/C and saved with it
-  when you add the unit. A *Passkey* field reveals or changes it, and buttons
-  roll a new random passkey or reset it to 0000.
+- Climate: horizontal swing is now supported alongside vertical — the swing
+  control offers off, vertical, horizontal and both, and each is sent to the unit.
+- New auto-on and auto-off **timers** (in minutes; 0 cancels).
+- Adding an A/C generates and sets a random passkey automatically; the passkey
+  field on the add screen is optional, for a unit that already has one you know.

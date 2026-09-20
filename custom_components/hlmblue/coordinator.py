@@ -99,6 +99,7 @@ class AcCoordinator(DataUpdateCoordinator[dict]):
             "mode": p.STATUS_MODE.get(r.get(p.DP_MODE)),
             "fan": p.FAN_REV.get(r.get(p.DP_FAN)),
             "swing": bool(r.get(p.DP_SWING_V)),
+            "swing_h": bool(r.get(p.DP_SWING_H)),
             "room": r.get(p.DP_ROOM_TEMP),
             "watts": watts,
         }
