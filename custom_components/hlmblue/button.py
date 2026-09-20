@@ -20,7 +20,10 @@ async def async_setup_entry(hass, entry: AcConfigEntry, async_add_entities: AddE
     async_add_entities(
         [
             AcButton(c, entry, "new_passkey", lambda: c.async_set_passkey(p.random_pin())),
-            AcButton(c, entry, "reset_passkey", c.async_reset_passkey),
+            # Reset is a rarely-used recovery action; hide it from the UI by
+            # default so it doesn't clutter dashboards (unhide it in the entity
+            # settings if you need it).
+            AcButton(c, entry, "reset_passkey", c.async_reset_passkey, visible=False),
         ]
     )
 
@@ -35,10 +38,13 @@ class AcButton(ButtonEntity):
         entry: AcConfigEntry,
         key: str,
         action: Callable[[], Awaitable[None]],
+        *,
+        visible: bool = True,
     ) -> None:
         self._action = action
         self._attr_translation_key = key
         self._attr_unique_id = f"{entry.entry_id}_{key}"
+        self._attr_entity_registry_visible_default = visible
         self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, coordinator.address)})
 
     async def async_press(self) -> None:

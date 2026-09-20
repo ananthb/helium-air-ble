@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.2
+
+- The "Reset passkey to 0000" button is now hidden by default so it doesn't
+  clutter dashboards — unhide it from the entity settings if you need it.
+
 ## 0.2.1
 
 - Fix the swing selector picking the wrong mode. The A/C's swing read-back
