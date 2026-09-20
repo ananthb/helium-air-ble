@@ -22,6 +22,8 @@ class AcPasskeyText(TextEntity):
     _attr_has_entity_name = True
     _attr_translation_key = "passkey"
     _attr_entity_category = EntityCategory.CONFIG
+    # Off dashboards by default — reach it from the device page when needed.
+    _attr_entity_registry_visible_default = False
     _attr_mode = TextMode.PASSWORD
     _attr_native_min = 4
     _attr_native_max = 4

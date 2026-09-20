@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.4
+
+- The Passkey field is now hidden by default too — reach it from the device
+  page (Settings → Devices → the A/C) to view or change the passkey.
+
 ## 0.2.3
 
 - The "New random passkey" button is now hidden by default too, so neither
