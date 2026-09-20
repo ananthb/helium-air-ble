@@ -70,6 +70,10 @@ class AcClimate(CoordinatorEntity[AcCoordinator], ClimateEntity):
     def __init__(self, coordinator: AcCoordinator, entry: AcConfigEntry) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = entry.entry_id
+        # Swing is optimistic: the unit's swing read-back (DPIDs 0x6E/0x6F) does
+        # not map cleanly to vertical/horizontal, so trusting it mis-selects the
+        # mode. Report what was last set instead; the commands are per-spec.
+        self._attr_swing_mode = SWING_OFF
         self._attr_device_info = DeviceInfo(
             connections={(CONNECTION_BLUETOOTH, coordinator.address)},
             identifiers={(DOMAIN, coordinator.address)},
@@ -119,17 +123,6 @@ class AcClimate(CoordinatorEntity[AcCoordinator], ClimateEntity):
     def fan_mode(self) -> str | None:
         return self._d.get("fan")
 
-    @property
-    def swing_mode(self) -> str:
-        v, h = self._d.get("swing"), self._d.get("swing_h")
-        if v and h:
-            return SWING_BOTH
-        if v:
-            return SWING_VERTICAL
-        if h:
-            return SWING_HORIZONTAL
-        return SWING_OFF
-
     async def async_set_temperature(self, **kwargs) -> None:
         temp = kwargs.get(ATTR_TEMPERATURE)
         if temp is None:
@@ -152,6 +145,8 @@ class AcClimate(CoordinatorEntity[AcCoordinator], ClimateEntity):
         want_h = swing_mode in (SWING_HORIZONTAL, SWING_BOTH)
         await self.coordinator.async_command(p.frame_swing(want_v))
         await self.coordinator.async_command(p.frame_swing_h(want_h))
+        self._attr_swing_mode = swing_mode
+        self.async_write_ha_state()
 
     async def async_turn_on(self) -> None:
         await self.coordinator.async_command(p.frame_power(True), power=True)

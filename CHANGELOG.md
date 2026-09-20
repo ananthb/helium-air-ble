@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1
+
+- Fix the swing selector picking the wrong mode. The A/C's swing read-back
+  doesn't map cleanly to vertical/horizontal, which skewed the shown selection;
+  the selector is now optimistic and reflects exactly what you chose.
+
 ## 0.2.0
 
 - Climate: horizontal swing is now supported alongside vertical — the swing
