@@ -1,5 +1,7 @@
 {
-  "name": "A/C Remote (BLE)",
-  "homeassistant": "2024.8.0",
-  "render_readme": true
+  "name": "He A/C",
+  "content_in_root": false,
+  "render_readme": true,
+  "hide_default_branch": true,
+  "homeassistant": "2024.8.0"
 }
