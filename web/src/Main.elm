@@ -355,7 +355,16 @@ view model =
             , viewLcd model.backlight model
             , viewError model.error
             , viewPad model
+            , viewFooter
             ]
+        ]
+
+
+viewFooter : Html Msg
+viewFooter =
+    div [ class "source" ]
+        [ a [ href "https://github.com/ananthb/hlmblue", target "_blank", rel "noopener" ]
+            [ text "source" ]
         ]
 
 

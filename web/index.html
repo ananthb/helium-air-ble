@@ -52,6 +52,14 @@
     }
     .remote.asleep { filter: saturate(.6) brightness(.96); }
 
+    /* Source link — a quiet footer at the base of the case. */
+    .source { margin-top: 2px; text-align: center; }
+    .source a {
+      font-size: 11px; letter-spacing: .04em; text-decoration: none;
+      color: #8a93a1; opacity: .75;
+    }
+    .source a:hover { opacity: 1; text-decoration: underline; }
+
     /* Status bar: indicator LED + Bluetooth logo + device name + menu, and brand. */
     .statusbar { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
     .indicator {
