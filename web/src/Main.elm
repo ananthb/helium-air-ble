@@ -2,16 +2,16 @@ port module Main exposing (main)
 
 {-| A Web Bluetooth remote for broadcast BLE air conditioners, styled as an LCD remote.
 
-The UI and the whole connection state machine live here, pure. The bytes never
-cross this boundary: Elm sends semantic intents out `sendIntent` and receives
-decoded status/events on `bleEvents`. Plain JS (js/ble.js, js/codec.js) owns the
-Web Bluetooth transport, the wire codec, and the persisted device registry.
+Elm owns the UI and the connection state machine, pure; plain JS (js/ble.js,
+js/codec.js) owns the Web Bluetooth transport, the wire codec, and the persisted
+device + passkey registry. Semantic intents go out `sendIntent`; decoded status
+and events come in on `bleEvents`.
 -}
 
 import Browser
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import Html.Events exposing (onClick, onInput)
+import Html.Events exposing (onClick)
 import Json.Decode as D
 import Json.Encode as E
 import Time
@@ -50,16 +50,17 @@ type alias Status =
 
 
 type alias Dev =
-    { id : String, name : String, available : Bool }
+    { id : String, name : String, pin : String, available : Bool }
 
 
 type alias Model =
     { conn : Conn
     , status : Status
-    , pin : String
     , device : Maybe String
+    , currentId : Maybe String
     , devices : List Dev
     , menuOpen : Bool
+    , reveal : Maybe String
     , error : Maybe String
     , backlight : Bool
     , idle : Int
@@ -85,10 +86,11 @@ init : () -> ( Model, Cmd Msg )
 init _ =
     ( { conn = Disconnected
       , status = Status False 24 "cool" "auto" False 0 0
-      , pin = "0000"
       , device = Nothing
+      , currentId = Nothing
       , devices = []
       , menuOpen = False
+      , reveal = Nothing
       , error = Nothing
       , backlight = True
       , idle = 0
@@ -104,11 +106,11 @@ init _ =
 type Msg
     = AddDevice
     | PickDevice String
-    | ForgetDevice String
+    | RemoveDevice String
+    | RevealPin String
+    | NewPasskey String
     | ToggleMenu
     | Disconnect
-    | PinChanged String
-    | Login
     | SetPower Bool
     | SetTemp Int
     | CycleMode
@@ -160,7 +162,6 @@ update msg model =
             ( applyEvent value model, Cmd.none )
 
         _ ->
-            -- any user interaction wakes the backlight and resets the idle timer
             userUpdate msg { model | idle = 0, backlight = True }
 
 
@@ -181,20 +182,20 @@ userUpdate msg model =
             , intent [ ( "kind", E.string "connectId" ), ( "id", E.string id ) ]
             )
 
-        ForgetDevice id ->
-            ( model, intent [ ( "kind", E.string "forget" ), ( "id", E.string id ) ] )
+        RemoveDevice id ->
+            ( { model | reveal = Nothing }, intent [ ( "kind", E.string "removeDevice" ), ( "id", E.string id ) ] )
+
+        RevealPin id ->
+            ( { model | reveal = toggle model.reveal id }, Cmd.none )
+
+        NewPasskey id ->
+            ( { model | reveal = Just id }, intent [ ( "kind", E.string "setPasskey" ), ( "id", E.string id ) ] )
 
         ToggleMenu ->
-            ( { model | menuOpen = not model.menuOpen }, Cmd.none )
+            ( { model | menuOpen = not model.menuOpen, reveal = Nothing }, Cmd.none )
 
         Disconnect ->
             ( { model | conn = Disconnected }, intent [ ( "kind", E.string "disconnect" ) ] )
-
-        PinChanged p ->
-            ( { model | pin = String.filter Char.isDigit p |> String.left 4 }, Cmd.none )
-
-        Login ->
-            ( model, intent [ ( "kind", E.string "login" ), ( "pin", E.string model.pin ) ] )
 
         SetPower on ->
             ( model, intent [ ( "kind", E.string "setPower" ), ( "on", E.bool on ) ] )
@@ -215,6 +216,15 @@ userUpdate msg model =
             ( model, Cmd.none )
 
 
+toggle : Maybe String -> String -> Maybe String
+toggle cur id =
+    if cur == Just id then
+        Nothing
+
+    else
+        Just id
+
+
 applyEvent : D.Value -> Model -> Model
 applyEvent value model =
     case D.decodeValue eventDecoder value of
@@ -227,6 +237,7 @@ applyEvent value model =
         Ok (DevicesEv devs current) ->
             { model
                 | devices = devs
+                , currentId = current
                 , device =
                     case current |> Maybe.andThen (\cid -> devs |> List.filter (\d -> d.id == cid) |> List.head) of
                         Just d ->
@@ -297,9 +308,10 @@ eventDecoder =
 
 devDecoder : D.Decoder Dev
 devDecoder =
-    D.map3 Dev
+    D.map4 Dev
         (D.field "id" D.string)
         (D.field "name" D.string)
+        (D.oneOf [ D.field "pin" D.string, D.succeed "0000" ])
         (D.oneOf [ D.field "available" D.bool, D.succeed True ])
 
 
@@ -387,9 +399,7 @@ viewMenu : Model -> Html Msg
 viewMenu model =
     div [ class "devmenu" ]
         (if List.isEmpty model.devices then
-            [ div [ class "devmenu-empty" ] [ text "No saved A/Cs yet" ]
-            , addRow
-            ]
+            [ div [ class "devmenu-empty" ] [ text "No saved A/Cs yet" ], addRow ]
 
          else
             List.map (viewDevRow model) model.devices ++ [ addRow ]
@@ -403,12 +413,33 @@ addRow =
 
 viewDevRow : Model -> Dev -> Html Msg
 viewDevRow model dev =
-    div [ classList [ ( "devrow", True ), ( "sel", model.device == Just dev.name ) ] ]
-        [ button [ class "devrow-pick", onClick (PickDevice dev.id) ]
-            [ span [ class ("dot " ++ (if dev.available then "ok" else "off")) ] []
-            , span [ class "devrow-name" ] [ text dev.name ]
+    let
+        isCurrent =
+            model.currentId == Just dev.id
+    in
+    div [ class "devrow-wrap" ]
+        [ div [ classList [ ( "devrow", True ), ( "sel", isCurrent ) ] ]
+            [ button [ class "devrow-pick", onClick (PickDevice dev.id) ]
+                [ span [ class ("dot " ++ (if dev.available then "ok" else "off")) ] []
+                , span [ class "devrow-name" ] [ text dev.name ]
+                ]
+            , button [ class "devrow-x", title "Reset to 0000 and forget", onClick (RemoveDevice dev.id) ] [ text "×" ]
             ]
-        , button [ class "devrow-x", title "Forget this A/C", onClick (ForgetDevice dev.id) ] [ text "×" ]
+        , if isCurrent then viewPasskey model dev else text ""
+        ]
+
+
+viewPasskey : Model -> Dev -> Html Msg
+viewPasskey model dev =
+    let
+        shown =
+            model.reveal == Just dev.id
+    in
+    div [ class "pkrow" ]
+        [ span [ class "pk-label" ] [ text "Passkey" ]
+        , span [ class "pk-value" ] [ text (if shown then dev.pin else "••••") ]
+        , button [ class "pk-btn", onClick (RevealPin dev.id) ] [ text (if shown then "Hide" else "Show") ]
+        , button [ class "pk-btn", onClick (NewPasskey dev.id) ] [ text "Set new" ]
         ]
 
 
@@ -438,7 +469,7 @@ tooltip model =
             "Connecting…"
 
         NeedPin ->
-            "Connected — enter the passkey to unlock"
+            "Unlocking…"
 
         Disconnected ->
             "Disconnected — tap to pick or add an A/C"
@@ -461,7 +492,7 @@ viewLcd backlight model =
                 viewReadout model.status
 
             NeedPin ->
-                placeholder "LOCKED"
+                placeholder "UNLOCKING"
 
             Connecting ->
                 placeholder "SCANNING"
@@ -562,18 +593,8 @@ viewPad model =
                 [ button [ class "btn big", disabled True ] [ text "SCANNING…" ] ]
 
         NeedPin ->
-            div [ class "pad pinpad" ]
-                [ input
-                    [ type_ "tel"
-                    , value model.pin
-                    , onInput PinChanged
-                    , class "pin"
-                    , attribute "maxlength" "4"
-                    , attribute "inputmode" "numeric"
-                    ]
-                    []
-                , button [ class "btn power big", onClick Login ] [ text "UNLOCK" ]
-                ]
+            div [ class "pad connect" ]
+                [ button [ class "btn big", disabled True ] [ text "UNLOCKING…" ] ]
 
         Ready ->
             let

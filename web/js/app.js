@@ -9,7 +9,8 @@ app.ports.sendIntent.subscribe(async (intent) => {
     case "listDevices": await ble.listDevices(); break;
     case "addDevice": await ble.addDevice(); break;
     case "connectId": await ble.connectId(intent.id); break;
-    case "forget": ble.forget(intent.id); break;
+    case "removeDevice": await ble.removeDevice(intent.id); break;
+    case "setPasskey": await ble.setPasskey(intent.id, intent.pin || null); break;
     case "login": await ble.login(intent.pin); break;
     case "setPower": await ble.setPower(intent.on); break;
     case "setTemp": await ble.setTemp(intent.value); break;

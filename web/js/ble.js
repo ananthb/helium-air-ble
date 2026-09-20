@@ -2,9 +2,14 @@
 // events; takes semantic intents. All wire encoding/decoding lives in codec.js.
 //
 // Web Bluetooth is Chrome/Edge/Chromium on desktop and Android only, over HTTPS.
-// requestDevice() needs a user gesture; reconnecting to an already-granted device
-// via getDevices() does not. Known devices persist in localStorage (for names)
-// and via the browser's own permission store (for reconnection).
+// requestDevice() needs a user gesture; reconnecting via getDevices() does not.
+// Known A/Cs persist in localStorage (name + passkey) and via the browser's own
+// permission store (for reconnection).
+//
+// Passkey handling: the A/C is unlocked by a BLE_PASSKEY frame. To change the
+// passkey we log in with the current one, then send the new one (the vendor app's
+// order-based flow). Note this firmware does not strictly enforce the passkey for
+// reading status; 0000 always works and is the reset/escape value.
 
 import { frames, decodeNotify, toStatus } from "./codec.js";
 
@@ -12,7 +17,14 @@ const SVC = 0x00a00a;
 const C_CMD = "0000b002-0000-1000-8000-00805f9b34fb";
 const C_NTF = "0000b003-0000-1000-8000-00805f9b34fb";
 const C_IND = "0000b004-0000-1000-8000-00805f9b34fb";
-const STORE = "acr.devices.v1";
+const STORE = "acr.devices.v2";
+const DEFAULT_PIN = "0000";
+
+export function randomPin() {
+  let n = "0000";
+  while (n === "0000") n = String(Math.floor(Math.random() * 10000)).padStart(4, "0");
+  return n;
+}
 
 export class AcRemote {
   constructor(emit) {
@@ -23,13 +35,20 @@ export class AcRemote {
     this.status = { power: false, temp: 24, mode: "cool", fan: "auto", swing: false, room: 0, watts: 0 };
   }
 
-  // ---- persisted device registry ----
+  // ---- persisted registry: { id: { name, last, pin } } ----
   _load() { try { return JSON.parse(localStorage.getItem(STORE)) || {}; } catch { return {}; } }
   _save(s) { try { localStorage.setItem(STORE, JSON.stringify(s)); } catch {} }
-  _remember(id, name) {
+  _entry(id) { return this._load()[id] || {}; }
+  _pinFor(id) { return this._entry(id).pin || DEFAULT_PIN; }
+  _remember(id, name, pin) {
     const s = this._load();
-    s[id] = { name: name || (s[id] && s[id].name) || "A/C", last: Date.now() };
+    const prev = s[id] || {};
+    s[id] = { name: name || prev.name || "A/C", last: Date.now(), pin: pin ?? prev.pin ?? DEFAULT_PIN };
     this._save(s);
+  }
+  _setPin(id, pin) {
+    const s = this._load();
+    if (s[id]) { s[id].pin = pin; this._save(s); }
   }
   _forget(id) { const s = this._load(); delete s[id]; this._save(s); }
 
@@ -38,10 +57,10 @@ export class AcRemote {
     let granted = [];
     try { if (navigator.bluetooth && navigator.bluetooth.getDevices) granted = await navigator.bluetooth.getDevices(); } catch {}
     const byId = {};
-    for (const [id, v] of Object.entries(stored)) byId[id] = { id, name: v.name || "A/C", available: false, last: v.last || 0 };
+    for (const [id, v] of Object.entries(stored)) byId[id] = { id, name: v.name || "A/C", pin: v.pin || DEFAULT_PIN, available: false, last: v.last || 0 };
     for (const d of granted) {
       const prev = byId[d.id] || {};
-      byId[d.id] = { id: d.id, name: d.name || prev.name || "A/C", available: true, last: prev.last || 0 };
+      byId[d.id] = { id: d.id, name: d.name || prev.name || "A/C", pin: prev.pin || this._pinFor(d.id), available: true, last: prev.last || 0 };
     }
     const devices = Object.values(byId).sort((a, b) => b.last - a.last);
     this.emit({ type: "devices", devices, current: this.connected && this.device ? this.device.id : null });
@@ -55,7 +74,15 @@ export class AcRemote {
     try {
       this.emit({ type: "state", state: "connecting" });
       const d = await navigator.bluetooth.requestDevice({ filters: [{ namePrefix: "HELM" }], optionalServices: [SVC] });
+      const isNew = !this._load()[d.id];
       await this._open(d);
+      if (isNew) {
+        // Configure a fresh random passkey on first pairing (from the 0000 default).
+        const pin = randomPin();
+        await this._changePasskey(pin);
+        this._setPin(d.id, pin);
+        await this.listDevices();
+      }
     } catch (err) {
       this.emit({ type: "error", message: humanize(err) });
       this.emit({ type: "state", state: "disconnected" });
@@ -100,18 +127,43 @@ export class AcRemote {
       ind.addEventListener("characteristicvaluechanged", (e) => this._onNotify(e.target.value));
     } catch (_) { /* no indicate char, fine */ }
     this.connected = true;
-    this._remember(device.id, device.name);
+    this._remember(device.id, device.name, null);
+    // Auto-unlock with the stored passkey, then ask for a status report.
+    await this._write(frames.login(this._pinFor(device.id)));
+    await this._write(frames.statusQuery());
     this.emit({ type: "state", state: "login", device: device.name || "A/C" });
     this.listDevices();
   }
 
-  forget(id) {
-    this._forget(id);
-    if (this.device && this.device.id === id) this.disconnect();
-    this.listDevices();
+  // ---- passkey ----
+  async _changePasskey(newPin) {
+    // Already logged in with the current passkey; send the new one to change it.
+    await this._write(frames.login(newPin));
+    await this._write(frames.statusQuery());
   }
 
+  async setPasskey(id, pin) {
+    if (!this.connected || !this.device || this.device.id !== id) return;
+    const next = pin || randomPin();
+    await this._changePasskey(next);
+    this._setPin(id, next);
+    await this.listDevices();
+  }
+
+  async removeDevice(id) {
+    // Reset the A/C to the 0000 default (if we're connected to it), then forget it.
+    if (this.connected && this.device && this.device.id === id) {
+      try { await this._changePasskey(DEFAULT_PIN); } catch {}
+      this.disconnect();
+    }
+    this._forget(id);
+    await this.listDevices();
+  }
+
+  forget(id) { return this.removeDevice(id); }
+
   async login(pin) {
+    if (this.device) this._setPin(this.device.id, pin);
     await this._write(frames.login(pin));
     await this._write(frames.statusQuery());
   }
