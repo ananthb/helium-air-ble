@@ -20,4 +20,9 @@ npm install
 npm run build     # -> dist/  (elm make + esbuild)
 ```
 
-Or with nix: `nix shell nixpkgs#elmPackages.elm nixpkgs#esbuild`. Elm 0.19.2.
+Cloudflare Pages runs exactly this (`npm ci` + `npm run build`, output `dist/`)
+on every push to `main` and deploys it. Nothing is committed but source.
+
+Note: `elm@0.19.2-0` is a real npm release that downloads the 0.19.2 binary on
+install; locally you can also build with `nix shell nixpkgs#elmPackages.elm
+nixpkgs#esbuild`.

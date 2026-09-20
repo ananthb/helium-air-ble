@@ -2,5 +2,11 @@
   "name": "ac-remote-web",
   "version": "0.0.0",
   "private": true,
-  "description": "No dependencies on purpose. The site is pre-built with nix (elm 0.19.2, which is nixpkgs-only) into web/dist and served by Cloudflare Pages directly. This manifest exists only so Cloudflare's mandatory `npm clean-install` step succeeds; the build itself runs in the build-web GitHub Action."
+  "scripts": {
+    "build": "elm make src/Main.elm --optimize --output=dist/elm.js && esbuild js/app.js --bundle --format=esm --minify --outfile=dist/app.js && cp index.html dist/"
+  },
+  "devDependencies": {
+    "elm": "0.19.2-0",
+    "esbuild": "0.24.0"
+  }
 }
