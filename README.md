@@ -1,8 +1,7 @@
 # hlmblue
 
 Local control of a Bluetooth air conditioner — a Home Assistant integration and a
-web app, no vendor cloud. Reverse-engineered from the vendor app — the protocol,
-how it was extracted, and the design are written up under [`docs/`](docs/).
+web app, no vendor cloud. The wire protocol is documented under [`docs/`](docs/).
 
 ## Home Assistant
 

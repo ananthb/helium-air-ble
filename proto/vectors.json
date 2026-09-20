@@ -1,5 +1,5 @@
 {
-  "_note": "Golden frames from com.vendor.mobileapp 1.0.1. Both codecs (HA/Python, site/TS) must reproduce these exactly.",
+  "_note": "Golden command frames. Both codecs (HA/Python, site/JavaScript) must reproduce these exactly.",
   "frames": {
     "power_on": "ff03eb0001000100000000020000000000000000010000000000",
     "power_off": "ff03eb0001000100000000020000000000000000010000000001",

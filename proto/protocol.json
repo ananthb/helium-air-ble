@@ -1,5 +1,5 @@
 {
-  "_note": "Canonical A/C protocol tables, transcribed from com.vendor.mobileapp 1.0.1 (bytecode bundle). Language codecs (Python for HA, TypeScript for the site) are generated/checked against this file and proto/vectors.json.",
+  "_note": "Canonical A/C protocol tables. Language codecs (Python for HA, JavaScript for the site) are generated/checked against this file and proto/vectors.json.",
   "app_version": "1.0.1",
   "gatt": {
     "service": "0000a00a-0000-1000-8000-00805f9b34fb",
@@ -173,8 +173,7 @@
     "payload": "4 ASCII digits",
     "level0": "first digit byte",
     "ack_dpid": "79",
-    "storage_key": "@vendor_passkey_<deviceId>",
-    "note": "factory default is 0000; app forces a user-chosen 4-digit PIN on first pairing (sendInitialBlePasskey). Sent after connect (sendLoginBlePasskey) before control is accepted.",
+    "note": "Factory default is 0000. Sent after connect, before control is accepted.",
     "default_pin": "0000"
   },
   "_verified": "Read path confirmed live via ESPHome proxy (power on, cool, 22C, room 31C). Reading requires a BLE_PASSKEY login first (0000 unlocked this unit); the STATUS_DATA query alone is silent."

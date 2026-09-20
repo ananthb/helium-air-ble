@@ -1,7 +1,6 @@
 #!/usr/bin/env node
-// Reference encoder/decoder for the A/C AC BLE + cloud protocol.
-// Reconstructed from com.vendor.mobileapp 1.0.1 (bytecode bundle, bytecode-dec).
-// Everything here is transcribed from the app's own serializer and senders.
+// Reference encoder/decoder for the A/C BLE protocol.
+// See docs/protocol.md for the wire format and proto/vectors.json for golden frames.
 
 const command_id = { FIRMWARE_UPDATE:100, VFS_UPDATE:101, SAVE_DEVICE_NAME:103,
   USER_ID:105, FACTORY_RESET:109, STATUS_DATA:500, BLE_PASSKEY:600,
