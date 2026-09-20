@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 
 const dist = "dist";
 const assets = ["index.html", "elm.js", "app.js", "manifest.webmanifest",
-  "icon.svg", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "apple-touch-icon.png"]
+  "icon.svg", "logo-fins.svg", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "apple-touch-icon.png"]
   .filter((f) => { try { readFileSync(`${dist}/${f}`); return true; } catch { return false; } });
 
 // Version = short hash of the built assets, so it changes only when content does.

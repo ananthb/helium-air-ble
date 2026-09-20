@@ -434,7 +434,7 @@ viewStatusBar model =
             , span [ class "devname" ] [ text (Maybe.withDefault "Select A/C" model.device) ]
             , span [ class "caret" ] [ text "▾" ]
             ]
-         , span [ class "brand" ] [ img [ class "brand-logo", src "icon.svg", alt "" ] [], text "He A/C" ]
+         , span [ class "brand" ] [ img [ class "brand-logo", src "logo-fins.svg", alt "" ] [], text "He A/C" ]
          ]
             ++ (if model.menuOpen then
                     [ div [ class "overlay", onClick ToggleMenu ] []
