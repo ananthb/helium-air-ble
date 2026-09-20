@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Dump a A/C's GATT table through an ESPHome Bluetooth proxy.
+"""Dump an A/C's GATT table through an ESPHome Bluetooth proxy.
 
 The AC does not need to be near you -- any ESP32 running `bluetooth_proxy` within
 BLE range of it works as a remote GATT client.
@@ -83,7 +83,7 @@ async def main():
         if args.mac:
             addr, addr_type = int(args.mac.replace(":", ""), 16), args.address_type
         else:
-            print("scanning for a A/C advertiser (up to %.0fs)..." % args.scan_timeout)
+            print("scanning for an A/C advertiser (up to %.0fs)..." % args.scan_timeout)
             addr, addr_type, name = await find_device(cli, args.scan_timeout)
             print("found %s at %012x (address type %d)" % (name, addr, addr_type))
 

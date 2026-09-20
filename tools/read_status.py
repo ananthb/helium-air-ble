@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read live status from a A/C through an ESPHome Bluetooth proxy.
+"""Read live status from an A/C through an ESPHome Bluetooth proxy.
 
 Verified against HELM__9869 via an esp32-c3 bluetooth_proxy. Reads only -- no
 control, no PIN. Decodes the 0xB003 notify stream and prints the AC's state.

@@ -1,8 +1,8 @@
 # hlmblue
 
-Local control of broadcast BLE air conditioners (sold in India, controlled by the
-[the vendor app](https://play.google.com/store/apps/details?id=com.vendor.mobileapp)
-app) with no vendor cloud — over Bluetooth Low Energy.
+Local control of broadcast BLE air conditioners (sold in India, controlled by a
+[vendor Android app](https://play.google.com/store/apps/details?id=com.vendor.mobileapp))
+with no vendor cloud — over Bluetooth Low Energy.
 
 The BLE protocol has been **fully reverse-engineered from the app**. From it, two
 things get built:

@@ -87,7 +87,7 @@ unit, there is a read path even before the command format is known.
 
 ## The protocol (decoded from the app)
 
-Everything below was transcribed from the **the vendor app** app itself —
+Everything below was transcribed from the **vendor app** itself —
 `com.vendor.mobileapp` 1.0.1, a React Native / Expo build whose logic ships as a
 bytecode bytecode bundle. See [`the docs`](the docs) for how to reproduce
 the extraction; the exact function names cited here are the app's own.
