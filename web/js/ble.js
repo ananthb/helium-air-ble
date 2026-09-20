@@ -17,7 +17,7 @@ export class AcRemote {
     this.emit = emit; // (event) => void
     this.device = null;
     this.cmd = null;
-    this.status = { power: false, temp: 24, mode: "cool", fan: "auto", room: 0, watts: 0 };
+    this.status = { power: false, temp: 24, mode: "cool", fan: "auto", swing: false, room: 0, watts: 0 };
   }
 
   async connect() {
@@ -61,6 +61,7 @@ export class AcRemote {
   async setTemp(c) { await this._write(frames.setTemp(c)); this._poll(); }
   async setMode(m) { await this._write(frames.setMode(m)); this._poll(); }
   async setFan(f) { await this._write(frames.setFan(f)); this._poll(); }
+  async setSwing(on) { await this._write(frames.setSwing(on)); this._poll(); }
 
   disconnect() {
     try { this.device && this.device.gatt.connected && this.device.gatt.disconnect(); } catch (_) {}

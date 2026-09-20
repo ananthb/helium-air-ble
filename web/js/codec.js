@@ -40,6 +40,7 @@ export const frames = {
   setTemp: (c) => acFrame(AC.TEMP, c),
   setMode: (m) => acFrame(AC.MODE, MODE[m] ?? MODE.cool),
   setFan: (f) => acFrame(AC.SPEED, FAN[f] ?? FAN.auto),
+  setSwing: (on) => acFrame(AC.SWING, on ? 1 : 0),
 };
 
 // Incoming 0xB003 notify value is ASCII text "Poll:<seq>:<hexframe>" (or Diag:).
@@ -76,6 +77,7 @@ export function toStatus(dp, prev = {}) {
   if (0x04 in dp) s.mode = MODE_REV[dp[0x04]] ?? String(dp[0x04]);
   if (0x05 in dp) s.fan = FAN_REV[dp[0x05]] ?? String(dp[0x05]);
   if (0x6a in dp) s.room = dp[0x6a];
+  if (0x6e in dp) s.swing = dp[0x6e] === 1;
   if (0x1c in dp) s.watts = dp[0x1c];
   return s;
 }

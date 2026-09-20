@@ -12,6 +12,7 @@ app.ports.sendIntent.subscribe(async (intent) => {
     case "setTemp": await ble.setTemp(intent.value); break;
     case "setMode": await ble.setMode(intent.value); break;
     case "setFan": await ble.setFan(intent.value); break;
+    case "setSwing": await ble.setSwing(intent.on); break;
     case "disconnect": ble.disconnect(); break;
   }
 });
