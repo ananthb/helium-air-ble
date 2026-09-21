@@ -5,7 +5,9 @@ web app, no vendor cloud. The wire protocol is documented under [`docs/`](docs/)
 
 ## Home Assistant
 
-Add this repo to [HACS](https://hacs.xyz) as a custom repository (category
+[![Open your Home Assistant instance and add this repository to HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=ananthb&repository=hlmblue&category=integration)
+
+Or add this repo to [HACS](https://hacs.xyz) as a custom repository (category
 *Integration*), install **He A/C (BLE)**, then add it from Settings → Devices &
 Services. It reaches the A/C through an ESPHome Bluetooth proxy.
 
