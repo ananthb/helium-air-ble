@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.6
+
+- Fix switching from cool to off usually appearing to do nothing. The A/C was
+  being switched off, but Home Assistant turned the entity straight back on: the
+  status it reads a moment after the command caught the compressor still
+  spinning down and took that as the unit running. Going via auto or dry first
+  worked because by then the compressor had already stopped. A power command is
+  now believed until the A/C's own report agrees with it.
+- The action shown is no longer "cooling" when only the fan is turning. The
+  threshold was 80 W, inside the 61-91 W this unit draws on the fan alone, so
+  the fan run-on after switching off was reported as cooling.
+
 ## 0.2.5
 
 - Fix wild temperature readings — the A/C sometimes sends a half-written status

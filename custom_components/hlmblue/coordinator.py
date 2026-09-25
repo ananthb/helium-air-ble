@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from datetime import timedelta
 
 from bleak_retry_connector import BleakClientWithServiceCache, establish_connection
@@ -21,7 +22,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from . import protocol as p
-from .const import CONF_PIN, DEFAULT_PIN, DOMAIN, POLL_INTERVAL, RUNNING_WATTS
+from .const import CONF_PIN, DEFAULT_PIN, DOMAIN, POLL_INTERVAL, POWER_SETTLE, RUNNING_WATTS
+from .power import PowerTracker
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -42,7 +44,7 @@ class AcCoordinator(DataUpdateCoordinator[dict]):
         self._client: BleakClientWithServiceCache | None = None
         self._lock = asyncio.Lock()
         self._raw: dict[int, int | None] = {}
-        self._power: bool = False
+        self._power = PowerTracker(RUNNING_WATTS, POWER_SETTLE)
 
     # ---- connection ----
 
@@ -84,9 +86,7 @@ class AcCoordinator(DataUpdateCoordinator[dict]):
         # reading outside the unit's own range is dropped rather than stored,
         # leaving the last good one in place.
         self._raw.update({k: v for k, v in dps.items() if p.plausible(k, v)})
-        watts = self._raw.get(p.DP_POWER_W) or 0
-        if self._raw.get(p.DP_POWER) == 1 or watts > RUNNING_WATTS:
-            self._power = True
+        self._power.report(self._raw.get(p.DP_POWER), self._raw.get(p.DP_POWER_W), time.monotonic())
         self.async_set_updated_data(self._snapshot())
 
     # ---- data ----
@@ -96,8 +96,8 @@ class AcCoordinator(DataUpdateCoordinator[dict]):
         watts = r.get(p.DP_POWER_W) or 0
         return {
             "available": self._client is not None and self._client.is_connected,
-            "power": self._power,
-            "running": self._raw.get(p.DP_POWER) == 1 or watts > RUNNING_WATTS,
+            "power": self._power.is_on,
+            "running": self._power.is_running,
             "temp": r.get(p.DP_TEMP),
             "mode": p.STATUS_MODE.get(r.get(p.DP_MODE)),
             "fan": p.FAN_REV.get(r.get(p.DP_FAN)),
@@ -118,7 +118,7 @@ class AcCoordinator(DataUpdateCoordinator[dict]):
     async def async_command(self, frame: bytes, *, power: bool | None = None) -> None:
         await self._ensure_connected()
         if power is not None:
-            self._power = power
+            self._power.command(power, time.monotonic())
         await self._write(frame)
         await asyncio.sleep(0.4)
         await self._write(p.frame_status())
