@@ -80,7 +80,10 @@ class AcCoordinator(DataUpdateCoordinator[dict]):
         dps = p.decode_notify(bytes(data))
         if not dps:
             return
-        self._raw.update(dps)
+        # A torn frame whose checksum happens to land is still nonsense, so a
+        # reading outside the unit's own range is dropped rather than stored,
+        # leaving the last good one in place.
+        self._raw.update({k: v for k, v in dps.items() if p.plausible(k, v)})
         watts = self._raw.get(p.DP_POWER_W) or 0
         if self._raw.get(p.DP_POWER) == 1 or watts > RUNNING_WATTS:
             self._power = True

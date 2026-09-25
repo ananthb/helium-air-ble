@@ -148,6 +148,33 @@ Each datapoint unit is `dpid(1) · type(1) · len(2 BE) · value(len)` — Tuya'
 The **status mode enum differs from the command map**: in status,
 `0=auto · 1=cool · 2=heat · 3=dry · 4=fan`.
 
+### The frame slot, and tearing
+
+`<hexframe>` is always **30 hex characters — a fixed 15-byte slot**, right-padded
+with `00` when the frame is shorter. One datapoint per notification, so a 5-byte
+body is padded by three bytes and an 8-byte body fills the slot exactly:
+
+```
+Poll:1919:55aa03070005 1a010001 00 2a 000000   <- padded
+Poll:1925:55aa03070008 6a020004 0000001e 9f    <- exact fit, room temp = 30 C
+```
+
+**The unit tears that slot.** A notification can carry a part-written frame with
+the start of the next one behind it, e.g. `55aa030700086a02000455aa0307`: a room
+temperature datapoint header whose four value bytes are the next frame's
+`55 aa 03 07`. A decoder that trusts the declared length reports that as a
+reading of 1437205255.
+
+So **verify both the declared body length and the checksum** before believing any
+datapoint, and treat a datapoint that overruns the body as a torn frame:
+
+* the frame must hold `6 + length + 1` bytes, and
+* `sum(bytes[:6 + length]) & 0xFF` must equal the checksum byte at `6 + length`.
+
+The padding is outside the body and outside the checksum, so it needs no special
+handling once the length is respected.
+
+
 ## Reaching the unit through an ESPHome proxy
 
 An ESP32 running [`bluetooth_proxy`](https://esphome.io/components/bluetooth_proxy.html)

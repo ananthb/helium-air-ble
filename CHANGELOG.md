@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.5
+
+- Fix wild temperature readings — the A/C sometimes sends a half-written status
+  notification with the next one's bytes behind it, and those bytes were being
+  read as a temperature. Home Assistant showed target temperatures like 21930 °C
+  and room temperatures in the billions. Status frames are now checked against
+  their own length and checksum before they are believed, and a reading outside
+  the unit's range is discarded instead of replacing a good one.
+
 ## 0.2.4
 
 - The Passkey field is now hidden by default too — reach it from the device

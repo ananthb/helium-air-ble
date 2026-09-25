@@ -55,6 +55,22 @@ DP_PASSKEY_ACK = 0x79
 TEMP_MIN = 16
 TEMP_MAX = 30
 
+# Ranges a reading has to fall in to be believed. Anything else is a torn frame
+# that got past the checksum; the DPIDs not listed here are unbounded.
+RANGES = {
+    DP_TEMP: (TEMP_MIN, TEMP_MAX),
+    DP_ROOM_TEMP: (-20, 70),
+    DP_POWER_W: (0, 20000),
+}
+
+
+def plausible(dpid: int, value: int | None) -> bool:
+    """Is `value` in range for `dpid`? True for a DPID with no range."""
+    lo, hi = RANGES.get(dpid, (None, None))
+    if lo is None or value is None:
+        return True
+    return lo <= value <= hi
+
 
 def serialize(cmd_id: int, payload: bytes = b"", *, total_level: int = 0, level0: int = 0) -> bytes:
     """CommandPacketBuilder.serialize(): 25-byte header + payload."""
@@ -128,7 +144,12 @@ def decode_notify(raw: bytes) -> dict[int, int | None]:
     """Decode one 0xB003 notification into {dpid: value}.
 
     The value is ASCII text "Poll:<seq>:<hexframe>" (or "Diag:..."). The hexframe
-    is a Tuya datapoint frame. Returns an empty dict for anything unrecognised.
+    is a Tuya datapoint frame, right-padded with "00" to a fixed 15-byte slot.
+
+    The unit tears that slot: a notification can carry a part-written frame with
+    the start of the next one behind it, so the declared body length and the
+    checksum are both verified before any datapoint is believed. Returns an
+    empty dict for anything unrecognised or unverified.
     """
     text = raw.decode("ascii", "replace").rstrip("\x00")
     parts = text.split(":")
@@ -140,15 +161,17 @@ def decode_notify(raw: bytes) -> dict[int, int | None]:
         return {}
     if len(b) < 7 or b[0] != 0x55 or b[1] != 0xAA:
         return {}
-    length = (b[4] << 8) | b[5]
+    end = 6 + ((b[4] << 8) | b[5])  # body runs [6, end); b[end] is the checksum
+    if len(b) <= end or sum(b[:end]) & 0xFF != b[end]:
+        return {}
     out: dict[int, int | None] = {}
     i = 6
-    end = min(6 + length, len(b))
-    while i + 4 <= end:
-        dpid = b[i]
-        dlen = (b[i + 2] << 8) | b[i + 3]
+    while i < end:
+        dlen = (b[i + 2] << 8) | b[i + 3] if i + 4 <= end else 0
+        if i + 4 + dlen > end:
+            return {}  # a datapoint overruns the body: the whole frame is torn
         val = b[i + 4 : i + 4 + dlen]
-        out[dpid] = int.from_bytes(val, "big") if val else None
+        out[b[i]] = int.from_bytes(val, "big") if val else None
         i += 4 + dlen
     return out
 

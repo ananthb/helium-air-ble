@@ -34,14 +34,21 @@ def ser(cid,payload=b""):
 STATUS_REQ=ser(500)   # command_id STATUS_DATA
 
 def parse_tuya(hexframe):
-    """55aa | ver | cmd | len(2 BE) | dp-units | checksum ; dp = dpid type len(2) val"""
+    """55aa | ver | cmd | len(2 BE) | dp-units | checksum ; dp = dpid type len(2) val
+
+    Frames are right-padded with "00" to a fixed 15-byte slot, and the unit tears
+    that slot (a part-written frame with the next one's bytes behind it), so the
+    length and checksum are verified before anything is returned."""
     try: b=bytes.fromhex(hexframe)
     except ValueError: return []
     if len(b)<7 or b[:2]!=b"\x55\xaa": return []
-    ln=int.from_bytes(b[4:6],"big"); body=b[6:6+ln]; out=[]; i=0
-    while i+4<=len(body):
-        dp=body[i]; typ=body[i+1]; dl=int.from_bytes(body[i+2:i+4],"big")
-        val=body[i+4:i+4+dl]; out.append((dp,int.from_bytes(val,"big") if val else None)); i+=4+dl
+    end=6+int.from_bytes(b[4:6],"big")
+    if len(b)<=end or sum(b[:end])&0xFF!=b[end]: return []
+    out=[]; i=6
+    while i<end:
+        dl=int.from_bytes(b[i+2:i+4],"big") if i+4<=end else 0
+        if i+4+dl>end: return []
+        val=b[i+4:i+4+dl]; out.append((b[i],int.from_bytes(val,"big") if val else None)); i+=4+dl
     return out
 
 def label(dp,n):

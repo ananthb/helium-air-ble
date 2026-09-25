@@ -45,18 +45,31 @@ const statusReq   = ()   => frame({cmdId:command_id.STATUS_DATA, payload:Buffer.
 const passkey     = pin  => { const p = Buffer.from(String(pin),'utf8').subarray(0,4);
   return frame({cmdId:command_id.BLE_PASSKEY, total_level:1, level0:p[0], payload:p}); };
 
-// Incoming 0xB003 notify decoder (status). Frames are ASCII-hex, '55aa'-delimited.
+// Incoming 0xB003 notify decoder (status). Frames are ASCII-hex, '55aa'-delimited,
+// right-padded with '00' to a fixed 15-byte slot.
 // layout per unit: 55aa <4 bytes> <dpid:1> <type:1> <len:2 BE> <data:len>
+// The unit tears that slot, so each frame's declared length and checksum are
+// verified; a frame that fails is dropped rather than reported as a reading.
 function decodeStatus(hex) {
   hex = hex.toLowerCase().replace(/\s+/g,'');
   const out = [];
   for (const seg of hex.split('55aa')) {
     if (seg.length < 20) continue;
-    const f = '55aa' + seg;
-    const dpid = f.slice(12,14);
-    const len  = parseInt(f.slice(16,20),16) * 2;
-    const data = f.slice(20, 20+len);
-    out.push({ dpid, value: data ? parseInt(data,16) : null, raw:data });
+    const b = Buffer.from('55aa' + seg, 'hex');
+    const end = 6 + b.readUInt16BE(4);
+    if (b.length <= end) continue;
+    let sum = 0;
+    for (let k = 0; k < end; k++) sum = (sum + b[k]) & 0xff;
+    if (sum !== b[end]) continue;
+    for (let i = 6; i < end; ) {
+      const dl = i + 4 <= end ? b.readUInt16BE(i + 2) : 0;
+      if (i + 4 + dl > end) break;
+      const data = b.subarray(i + 4, i + 4 + dl);
+      out.push({ dpid: b[i].toString(16).padStart(2,'0'),
+                 value: data.length ? parseInt(data.toString('hex'),16) : null,
+                 raw: data.toString('hex') });
+      i += 4 + dl;
+    }
   }
   return out;
 }

@@ -55,8 +55,12 @@ export const frames = {
 };
 
 // Incoming 0xB003 notify value is ASCII text "Poll:<seq>:<hexframe>" (or Diag:).
-// The hexframe is a standard Tuya datapoint frame:
+// The hexframe is a standard Tuya datapoint frame, right-padded with "00" to a
+// fixed 15-byte slot:
 //   55aa | ver | cmd(07) | len(2 BE) | [dpid type len(2 BE) value]... | checksum
+// The unit tears that slot — a part-written frame with the start of the next one
+// behind it — so verify the declared length and the checksum before believing
+// any datapoint. Without that, a torn frame reports header bytes as a reading.
 export function decodeNotify(bytes) {
   const text = new TextDecoder().decode(bytes).replace(/\0+$/, "");
   const parts = text.split(":");
@@ -64,16 +68,19 @@ export function decodeNotify(bytes) {
   const hex = parts[parts.length - 1];
   const b = hexToBytes(hex);
   if (!b || b.length < 7 || b[0] !== 0x55 || b[1] !== 0xaa) return null;
-  const len = (b[4] << 8) | b[5];
+  const end = 6 + ((b[4] << 8) | b[5]); // body is [6, end); b[end] is the checksum
+  if (b.length <= end) return null;
+  let sum = 0;
+  for (let k = 0; k < end; k++) sum = (sum + b[k]) & 0xff;
+  if (sum !== b[end]) return null;
   const out = {};
   let i = 6;
-  const end = Math.min(6 + len, b.length);
-  while (i + 4 <= end) {
-    const dpid = b[i];
-    const dl = (b[i + 2] << 8) | b[i + 3];
+  while (i < end) {
+    const dl = i + 4 <= end ? (b[i + 2] << 8) | b[i + 3] : 0;
+    if (i + 4 + dl > end) return null; // a datapoint overruns the body
     let v = 0;
     for (let k = 0; k < dl; k++) v = (v << 8) | b[i + 4 + k];
-    out[dpid] = v;
+    out[b[i]] = v;
     i += 4 + dl;
   }
   return out;
