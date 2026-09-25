@@ -175,10 +175,6 @@ statusFolding =
                 -- status 2 is heat; in a command 2 would mean auto
                 (Codec.toStatus (Dict.fromList [ ( 0x04, 2 ) ]) start).mode
                     |> Expect.equal "heat"
-        , test "power is on when the datapoint reads 1" <|
-            \_ ->
-                (Codec.toStatus (Dict.fromList [ ( 0x01, 1 ) ]) start).power
-                    |> Expect.equal True
         , test "an out-of-range setpoint leaves the last good one alone" <|
             \_ ->
                 (Codec.toStatus (Dict.fromList [ ( 0x02, 21930 ) ]) { start | temp = 24 }).temp

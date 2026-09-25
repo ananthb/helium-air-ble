@@ -2,10 +2,10 @@ port module Main exposing (main)
 
 {-| A Web Bluetooth remote for broadcast BLE air conditioners, styled as an LCD remote.
 
-Elm owns the UI, the connection state machine and the wire codec (`Codec`), all
-pure; plain JS (js/ble.js) owns only the Web Bluetooth transport and the
-persisted device registry. Frames go out as bytes on `sendIntent`; raw
-notifications and transport events come back on `bleEvents`.
+Elm owns the UI, the connection state machine, the wire codec (`Codec`) and the
+unit's on/off state (`Power`), all pure; plain JS (js/ble.js) owns only the Web
+Bluetooth transport and the persisted device registry. Frames go out as bytes on
+`sendIntent`; raw notifications and transport events come back on `bleEvents`.
 
 -}
 
@@ -16,6 +16,7 @@ import Html.Attributes exposing (..)
 import Html.Events exposing (onClick)
 import Json.Decode as D
 import Json.Encode as E
+import Power
 import Random
 import Time
 
@@ -48,6 +49,11 @@ type alias Dev =
 type alias Model =
     { conn : Conn
     , status : Codec.Status
+    , power : Power.Power
+
+    -- A plain count of Tick seconds. Only differences matter, and it is what
+    -- Power measures its settle window in.
+    , clock : Int
     , timerMin : Int
     , swingV : Bool
     , swingH : Bool
@@ -71,6 +77,8 @@ init : () -> ( Model, Cmd Msg )
 init _ =
     ( { conn = Disconnected
       , status = Codec.initialStatus
+      , power = Power.initial
+      , clock = 0
       , timerMin = 0
       , swingV = False
       , swingH = False
@@ -202,7 +210,7 @@ update msg model =
                 i =
                     model.idle + 1
             in
-            ( { model | idle = i, backlight = i < backlightTimeout }, Cmd.none )
+            ( { model | idle = i, backlight = i < backlightTimeout, clock = model.clock + 1 }, Cmd.none )
 
         Event value ->
             applyEvent value model
@@ -262,7 +270,9 @@ userUpdate msg model =
             ( { model | conn = Disconnected }, intent [ ( "kind", E.string "disconnect" ) ] )
 
         SetPower on ->
-            ( { model | timerMin = 0 }, write True [ Codec.setPower on ] )
+            ( { model | timerMin = 0, power = Power.command on model.clock model.power }
+            , write True [ Codec.setPower on ]
+            )
 
         SetTemp t ->
             ( model, write True [ Codec.setTemp t ] )
@@ -287,7 +297,7 @@ userUpdate msg model =
                     nextTimer model.timerMin
 
                 timerFrame =
-                    if st.power then
+                    if model.power.on then
                         Codec.setOffTimer m
 
                     else
@@ -319,7 +329,17 @@ applyEvent value model =
             -- any claim that the unit is talking to us.
             case Codec.decodeNotify bytes of
                 Just dps ->
-                    ( { model | status = Codec.toStatus dps model.status, conn = Ready }, Cmd.none )
+                    let
+                        status =
+                            Codec.toStatus dps model.status
+                    in
+                    ( { model
+                        | status = status
+                        , power = Power.report dps status model.clock model.power
+                        , conn = Ready
+                      }
+                    , Cmd.none
+                    )
 
                 Nothing ->
                     ( model, Cmd.none )
@@ -638,7 +658,7 @@ viewLcd backlight model =
     div [ classList [ ( "lcd", True ), ( "dark", not backlight ) ] ] <|
         case model.conn of
             Ready ->
-                viewReadout model.swingV model.swingH model.status
+                viewReadout model.power.on model.swingV model.swingH model.status
 
             NeedPin ->
                 placeholder "UNLOCKING"
@@ -650,10 +670,10 @@ viewLcd backlight model =
                 placeholder "OFFLINE"
 
 
-viewReadout : Bool -> Bool -> Codec.Status -> List (Html Msg)
-viewReadout swingV swingH st =
+viewReadout : Bool -> Bool -> Bool -> Codec.Status -> List (Html Msg)
+viewReadout powerOn swingV swingH st =
     [ div [ class "lcd-top" ]
-        [ span [ classList [ ( "seg", True ), ( "on", st.power ) ] ] [ text (String.toUpper st.mode) ]
+        [ span [ classList [ ( "seg", True ), ( "on", powerOn ) ] ] [ text (String.toUpper st.mode) ]
         , span [ class "room" ] [ text ("IN " ++ String.fromInt st.room ++ "°") ]
         ]
     , div [ class "lcd-main" ]
@@ -783,7 +803,7 @@ viewPad model =
                     model.status
             in
             div [ class "pad grid" ]
-                [ button [ classList [ ( "btn", True ), ( "power", True ), ( "on", st.power ) ], onClick (SetPower (not st.power)) ]
+                [ button [ classList [ ( "btn", True ), ( "power", True ), ( "on", model.power.on ) ], onClick (SetPower (not model.power.on)) ]
                     [ glyph "⏻", small "POWER" ]
                 , div [ class "rocker" ]
                     [ button [ class "btn up", onClick (SetTemp (Basics.min 30 (st.temp + 1))) ] [ text "+" ]
@@ -794,7 +814,7 @@ viewPad model =
                 , button [ class "btn", onClick CycleFan ] [ glyph "❋", small "FAN" ]
                 , button [ classList [ ( "btn", True ), ( "on", model.swingV ) ], onClick (SetSwing (not model.swingV)) ] [ glyph "↕", small "SWING" ]
                 , button [ classList [ ( "btn", True ), ( "on", model.swingH ) ], onClick (SetSwingH (not model.swingH)) ] [ glyph "↔", small "SWING H" ]
-                , button [ classList [ ( "btn", True ), ( "on", model.timerMin > 0 ) ], onClick CycleTimer ] [ glyph "⏱", small (timerLabel model.timerMin st.power) ]
+                , button [ classList [ ( "btn", True ), ( "on", model.timerMin > 0 ) ], onClick CycleTimer ] [ glyph "⏱", small (timerLabel model.timerMin model.power.on) ]
                 , button [ class "btn ghost", onClick Disconnect ] [ glyph "⏏", small "EXIT" ]
                 ]
 

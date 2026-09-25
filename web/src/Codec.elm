@@ -4,6 +4,7 @@ module Codec exposing
     , setSwing, setSwingH, setOffTimer, setOnTimer
     , decodeNotify, toStatus, plausible
     , modes, fans, tempMin, tempMax, randomPin
+    , dpPower, runningWatts
     )
 
 {-| The A/C wire codec, pure Elm.
@@ -27,6 +28,7 @@ for the golden command frames, and `../tests/CodecTests.elm` for both.
 @docs setSwing, setSwingH, setOffTimer, setOnTimer
 @docs decodeNotify, toStatus, plausible
 @docs modes, fans, tempMin, tempMax, randomPin
+@docs dpPower, runningWatts
 
 -}
 
@@ -49,8 +51,7 @@ type alias Frame =
 {-| The folded state of the unit, as the UI wants it.
 -}
 type alias Status =
-    { power : Bool
-    , temp : Int
+    { temp : Int
     , mode : String
     , fan : String
     , room : Int
@@ -60,7 +61,7 @@ type alias Status =
 
 initialStatus : Status
 initialStatus =
-    { power = False, temp = 24, mode = "cool", fan = "auto", room = 0, watts = 0 }
+    { temp = 24, mode = "cool", fan = "auto", room = 0, watts = 0 }
 
 
 
@@ -136,6 +137,16 @@ powerOn =
 powerOff : Int
 powerOff =
     1
+
+
+{-| Above this power draw the compressor is working rather than just the fan.
+Measured on a live unit: ~19 W in standby, 61-91 W on the fan alone (including
+the run-on for half a minute after a power-off), and 316 W upwards once the
+inverter compressor is doing something.
+-}
+runningWatts : Int
+runningWatts =
+    150
 
 
 tempMin : Int
@@ -533,9 +544,10 @@ beInt b from dlen =
 {-| Fold a batch of datapoints into the status the UI shows, keeping the
 previous reading for anything the batch does not mention.
 
-Swing is deliberately not folded in: the unit's read-back (DPIDs 0x6e/0x6f)
-does not map cleanly onto vertical and horizontal, so the UI tracks what it
-last set instead.
+Two things are deliberately not folded in. Swing, because the unit's read-back
+(DPIDs 0x6e/0x6f) does not map cleanly onto vertical and horizontal, so the UI
+tracks what it last set instead. And on/off, because no report says whether the
+unit is on — see `Power`.
 
 -}
 toStatus : Dict Int Int -> Status -> Status
@@ -544,8 +556,7 @@ toStatus dp prev =
         believed key =
             Dict.get key dp |> Maybe.andThen (keepIfPlausible key)
     in
-    { power = believed dpPower |> Maybe.map ((==) 1) |> Maybe.withDefault prev.power
-    , temp = believed dpTemp |> Maybe.withDefault prev.temp
+    { temp = believed dpTemp |> Maybe.withDefault prev.temp
     , mode = believed dpMode |> Maybe.andThen statusMode |> Maybe.withDefault prev.mode
     , fan = believed dpFan |> Maybe.andThen fanName |> Maybe.withDefault prev.fan
     , room = believed dpRoomTemp |> Maybe.withDefault prev.room
