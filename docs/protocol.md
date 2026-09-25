@@ -135,7 +135,7 @@ Each datapoint unit is `dpid(1) · type(1) · len(2 BE) · value(len)` — Tuya'
 
 | dpid | meaning | dpid | meaning |
 |---|---|---|---|
-| `0x01` | power (`0`=on, `1`=off) | `0x69` | silent |
+| `0x01` | power (`1`=on, `0`=off) | `0x69` | silent |
 | `0x02` | temperature setpoint °C | `0x6A` | room temperature °C |
 | `0x04` | mode (enum, below) | `0x6B` | coil temp *(inferred)* |
 | `0x05` | fan speed (enum) | `0x6D` | display |
@@ -147,6 +147,14 @@ Each datapoint unit is `dpid(1) · type(1) · len(2 BE) · value(len)` — Tuya'
 
 The **status mode enum differs from the command map**: in status,
 `0=auto · 1=cool · 2=heat · 3=dry · 4=fan`.
+
+**Power is inverted the same way.** The `POWER` command takes `ON = 0`, but
+status DPID `0x01` reports `1` for on and `0` for off. Verified live: in
+fan-only mode, drawing 24 W with the compressor necessarily stopped, the unit
+reported `0x01 = 1`; switched off at 19 W it reports `0`. So `0x01` is the
+unit's own on/off state and not a compressor flag — whether it is *working* has
+to come from the power draw (DPID `0x1C`), because a unit idling at its setpoint
+is still on.
 
 ### The frame slot, and tearing
 

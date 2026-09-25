@@ -1,17 +1,21 @@
 """Tracking whether the A/C is on — pure, no Home Assistant imports.
 
-The unit reports no power state. DPID 0x01 and the power draw say only whether
-it is *working*, so a unit that is on but idle at its setpoint looks exactly like
-one that is off. Running is therefore taken as proof that it is on, and off is
-only ever known because we asked for it.
+DPID 0x01 is the unit's own on/off state, **1 = on, 0 = off**. That is the
+inverse of the POWER *command*, where ON is 0 — the same trap as the mode map,
+which also differs between what the unit takes and what it reports.
 
-That leaves the trap this module exists to close. The status read a fraction of
-a second after "turn off" catches the compressor still spinning down, and
-reading that as "running" turned the unit straight back on in Home Assistant:
-cool -> off looked like it did nothing, while going via auto or dry first worked,
-because by then the compressor had already stopped. So a power command is
-believed until the unit's own report agrees with it, or until the settle window
-runs out and the command has evidently not taken.
+Measured, not inferred: with the unit in fan-only mode and drawing 24 W, well
+under `running_watts`, it reported 0x01 = 1. The compressor cannot have been
+running at that draw, so 0x01 is not a compressor flag. Off at 19 W it reports 0.
+
+So on/off is read straight from the unit, and the power draw is used only to say
+whether it is *working* — which is what `hvac_action` wants, and which 0x01
+cannot tell you, since a unit idling at its setpoint is still on.
+
+The one thing a command has to survive is the status read that follows it a
+fraction of a second later, which may have been taken before the unit acted. So
+a command outranks the unit's report until the report agrees with it, or until
+the grace window closes and the command has evidently not taken.
 """
 
 from __future__ import annotations
@@ -43,13 +47,15 @@ class PowerTracker:
     def report(self, dp_power: int | None, watts: int | None, now: float) -> None:
         """Fold in one status report.
 
-        DPID 0x01 reads 1 while the unit is working, and the draw backs it up.
-        Either is enough on its own: the DPID is absent from most notifications,
-        which carry a single datapoint each.
+        Most notifications carry a single datapoint, so `dp_power` is usually
+        absent; the on/off state then simply stands.
         """
-        self._running = dp_power == 1 or (watts or 0) > self._running_watts
+        self._running = (watts or 0) > self._running_watts
+        if dp_power is None:
+            return
+        reported_on = dp_power == 1
         if now < self._hold_until:
-            if self._running == self._on:
+            if reported_on == self._on:
                 self._hold_until = 0.0  # the unit agrees; watch it again
-        elif self._running:
-            self._on = True
+        else:
+            self._on = reported_on

@@ -52,7 +52,7 @@ def parse_tuya(hexframe):
     return out
 
 def label(dp,n):
-    if dp==0x01: return "ON" if n==0 else "OFF"
+    if dp==0x01: return "ON" if n==1 else "OFF"  # status is 1=on, the inverse of the command
     if dp==0x02: return f"{n} C setpoint"
     if dp==0x04: return MODE.get(n,n)
     if dp==0x05: return FAN.get(n,n)

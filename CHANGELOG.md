@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.7
+
+- The A/C now shows as **idle** rather than **cooling** when it is switched on
+  but has reached its setpoint. Its on/off datapoint was being read as a
+  "working" flag, so anything switched on looked like it was cooling.
+- On/off is now read from the A/C itself rather than worked out from its power
+  draw, so the state follows the unit more closely — including when it is
+  switched with its own remote.
+
 ## 0.2.6
 
 - Fix switching from cool to off usually appearing to do nothing. The A/C was

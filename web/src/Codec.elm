@@ -140,9 +140,9 @@ powerOff =
 
 
 {-| Above this power draw the compressor is working rather than just the fan.
-Measured on a live unit: ~19 W in standby, 61-91 W on the fan alone (including
-the run-on for half a minute after a power-off), and 316 W upwards once the
-inverter compressor is doing something.
+Measured on a live unit: 19-24 W idle or on the fan alone, 61-91 W while the fan
+runs on after a power-off, and 316 W upwards once the inverter compressor is
+doing something.
 -}
 runningWatts : Int
 runningWatts =

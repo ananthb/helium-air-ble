@@ -42,6 +42,9 @@ FAN = {"auto": 0, "low": 1, "medium": 2, "high": 3}
 FAN_REV = {v: k for k, v in FAN.items()}
 
 # status DPIDs
+# 0x01 is the unit's on/off state, 1 = on -- the inverse of the POWER command
+# above, where ON is 0. Verified live: on with only the fan turning, drawing
+# 24 W, it reports 1. See power.py.
 DP_POWER = 0x01
 DP_TEMP = 0x02
 DP_MODE = 0x04
