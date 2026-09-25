@@ -2,18 +2,21 @@ port module Main exposing (main)
 
 {-| A Web Bluetooth remote for broadcast BLE air conditioners, styled as an LCD remote.
 
-Elm owns the UI and the connection state machine, pure; plain JS (js/ble.js,
-js/codec.js) owns the Web Bluetooth transport, the wire codec, and the persisted
-device + passkey registry. Semantic intents go out `sendIntent`; decoded status
-and events come in on `bleEvents`.
+Elm owns the UI, the connection state machine and the wire codec (`Codec`), all
+pure; plain JS (js/ble.js) owns only the Web Bluetooth transport and the
+persisted device registry. Frames go out as bytes on `sendIntent`; raw
+notifications and transport events come back on `bleEvents`.
+
 -}
 
 import Browser
+import Codec
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onClick)
 import Json.Decode as D
 import Json.Encode as E
+import Random
 import Time
 
 
@@ -38,23 +41,13 @@ type Conn
     | Ready
 
 
-type alias Status =
-    { power : Bool
-    , temp : Int
-    , mode : String
-    , fan : String
-    , room : Int
-    , watts : Int
-    }
-
-
 type alias Dev =
     { id : String, name : String, pin : String, available : Bool }
 
 
 type alias Model =
     { conn : Conn
-    , status : Status
+    , status : Codec.Status
     , timerMin : Int
     , swingV : Bool
     , swingH : Bool
@@ -74,20 +67,10 @@ backlightTimeout =
     60
 
 
-modes : List String
-modes =
-    [ "cool", "dry", "fan", "auto", "heat" ]
-
-
-fans : List String
-fans =
-    [ "auto", "low", "medium", "high" ]
-
-
 init : () -> ( Model, Cmd Msg )
 init _ =
     ( { conn = Disconnected
-      , status = Status False 24 "cool" "auto" 0 0
+      , status = Codec.initialStatus
       , timerMin = 0
       , swingV = False
       , swingH = False
@@ -100,7 +83,15 @@ init _ =
       , backlight = True
       , idle = 0
       }
-    , sendIntent (E.object [ ( "kind", E.string "listDevices" ) ])
+      -- The status query is a constant frame, so hand it over once and let the
+      -- transport re-send it as its own poll.
+    , Cmd.batch
+        [ intent [ ( "kind", E.string "listDevices" ) ]
+        , intent
+            [ ( "kind", E.string "pollFrame" )
+            , ( "frames", encodeFrames [ Codec.statusQuery ] )
+            ]
+        ]
     )
 
 
@@ -123,6 +114,7 @@ type Msg
     | SetSwing Bool
     | SetSwingH Bool
     | CycleTimer
+    | PasskeyGenerated String String
     | Event D.Value
     | Tick
 
@@ -130,6 +122,32 @@ type Msg
 intent : List ( String, E.Value ) -> Cmd Msg
 intent fields =
     sendIntent (E.object fields)
+
+
+encodeFrames : List Codec.Frame -> E.Value
+encodeFrames =
+    E.list (E.list E.int)
+
+
+{-| Write frames to the unit, in order. `poll` asks the transport to follow them
+with a status query once the unit has had a moment to act on them.
+-}
+write : Bool -> List Codec.Frame -> Cmd Msg
+write poll frames =
+    intent
+        [ ( "kind", E.string "write" )
+        , ( "frames", encodeFrames frames )
+        , ( "poll", E.bool poll )
+        ]
+
+
+{-| Unlock the unit with `pin`, then ask what state it is in. This pair is sent
+on connecting and after every passkey change, which is how the unit is told a
+new passkey in the first place.
+-}
+unlock : String -> List Codec.Frame
+unlock pin =
+    [ Codec.login pin, Codec.statusQuery ]
 
 
 next : List String -> String -> String
@@ -155,7 +173,8 @@ next xs cur =
             go xs
 
 
-{-| Cycle the timer through off / 1h / 2h / 4h / 8h (minutes). -}
+{-| Cycle the timer through off / 1h / 2h / 4h / 8h (minutes).
+-}
 nextTimer : Int -> Int
 nextTimer cur =
     case cur of
@@ -186,7 +205,7 @@ update msg model =
             ( { model | idle = i, backlight = i < backlightTimeout }, Cmd.none )
 
         Event value ->
-            ( applyEvent value model, Cmd.none )
+            applyEvent value model
 
         _ ->
             userUpdate msg { model | idle = 0, backlight = True }
@@ -210,13 +229,31 @@ userUpdate msg model =
             )
 
         RemoveDevice id ->
-            ( { model | reveal = Nothing }, intent [ ( "kind", E.string "removeDevice" ), ( "id", E.string id ) ] )
+            -- The transport writes these before it disconnects, so the unit is
+            -- back on the 0000 default and can be added again from any browser.
+            ( { model | reveal = Nothing }
+            , intent
+                [ ( "kind", E.string "removeDevice" )
+                , ( "id", E.string id )
+                , ( "frames", encodeFrames (unlock defaultPin) )
+                ]
+            )
 
         RevealPin id ->
             ( { model | reveal = toggle model.reveal id }, Cmd.none )
 
         NewPasskey id ->
-            ( { model | reveal = Just id }, intent [ ( "kind", E.string "setPasskey" ), ( "id", E.string id ) ] )
+            ( { model | reveal = Just id }, Random.generate (PasskeyGenerated id) Codec.randomPin )
+
+        PasskeyGenerated id pin ->
+            ( model
+            , intent
+                [ ( "kind", E.string "setPasskey" )
+                , ( "id", E.string id )
+                , ( "pin", E.string pin )
+                , ( "frames", encodeFrames (unlock pin) )
+                ]
+            )
 
         ToggleMenu ->
             ( { model | menuOpen = not model.menuOpen, reveal = Nothing }, Cmd.none )
@@ -225,38 +262,38 @@ userUpdate msg model =
             ( { model | conn = Disconnected }, intent [ ( "kind", E.string "disconnect" ) ] )
 
         SetPower on ->
-            ( { model | timerMin = 0 }, intent [ ( "kind", E.string "setPower" ), ( "on", E.bool on ) ] )
+            ( { model | timerMin = 0 }, write True [ Codec.setPower on ] )
 
         SetTemp t ->
-            ( model, intent [ ( "kind", E.string "setTemp" ), ( "value", E.int t ) ] )
+            ( model, write True [ Codec.setTemp t ] )
 
         CycleMode ->
-            ( model, intent [ ( "kind", E.string "setMode" ), ( "value", E.string (next modes st.mode) ) ] )
+            ( model, write True [ Codec.setMode (next Codec.modes st.mode) ] )
 
         CycleFan ->
-            ( model, intent [ ( "kind", E.string "setFan" ), ( "value", E.string (next fans st.fan) ) ] )
+            ( model, write True [ Codec.setFan (next Codec.fans st.fan) ] )
 
         SetSwing on ->
             -- Optimistic: the unit's swing read-back doesn't map cleanly to the
             -- axes, so track what we set rather than trusting decoded status.
-            ( { model | swingV = on }, intent [ ( "kind", E.string "setSwing" ), ( "on", E.bool on ) ] )
+            ( { model | swingV = on }, write True [ Codec.setSwing on ] )
 
         SetSwingH on ->
-            ( { model | swingH = on }, intent [ ( "kind", E.string "setSwingH" ), ( "on", E.bool on ) ] )
+            ( { model | swingH = on }, write True [ Codec.setSwingH on ] )
 
         CycleTimer ->
             let
                 m =
                     nextTimer model.timerMin
 
-                kind =
+                timerFrame =
                     if st.power then
-                        "setOffTimer"
+                        Codec.setOffTimer m
 
                     else
-                        "setOnTimer"
+                        Codec.setOnTimer m
             in
-            ( { model | timerMin = m }, intent [ ( "kind", E.string kind ), ( "value", E.int m ) ] )
+            ( { model | timerMin = m }, write True [ timerFrame ] )
 
         _ ->
             ( model, Cmd.none )
@@ -271,17 +308,39 @@ toggle cur id =
         Just id
 
 
-applyEvent : D.Value -> Model -> Model
+applyEvent : D.Value -> Model -> ( Model, Cmd Msg )
 applyEvent value model =
     case D.decodeValue eventDecoder value of
         Ok (StateEv s dev) ->
-            { model | conn = s, device = orElse dev model.device, error = Nothing }
+            ( { model | conn = s, device = orElse dev model.device, error = Nothing }, Cmd.none )
 
-        Ok (StatusEv status) ->
-            { model | status = status, conn = Ready }
+        Ok (NotifyEv bytes) ->
+            -- A notification the codec will not vouch for is dropped, and with it
+            -- any claim that the unit is talking to us.
+            case Codec.decodeNotify bytes of
+                Just dps ->
+                    ( { model | status = Codec.toStatus dps model.status, conn = Ready }, Cmd.none )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        Ok (OpenedEv id pin isNew) ->
+            ( model
+            , Cmd.batch
+                [ write False (unlock pin)
+
+                -- A unit being paired for the first time is still on the 0000
+                -- default; give it one of its own.
+                , if isNew then
+                    Random.generate (PasskeyGenerated id) Codec.randomPin
+
+                  else
+                    Cmd.none
+                ]
+            )
 
         Ok (DevicesEv devs current) ->
-            { model
+            ( { model
                 | devices = devs
                 , currentId = current
                 , device =
@@ -291,10 +350,12 @@ applyEvent value model =
 
                         Nothing ->
                             model.device
-            }
+              }
+            , Cmd.none
+            )
 
         Ok (ErrorEv m) ->
-            { model
+            ( { model
                 | error = Just m
                 , conn =
                     if model.conn == Connecting then
@@ -302,10 +363,12 @@ applyEvent value model =
 
                     else
                         model.conn
-            }
+              }
+            , Cmd.none
+            )
 
         Err _ ->
-            model
+            ( model, Cmd.none )
 
 
 orElse : Maybe a -> Maybe a -> Maybe a
@@ -320,7 +383,8 @@ orElse a b =
 
 type Ev
     = StateEv Conn (Maybe String)
-    | StatusEv Status
+    | NotifyEv (List Int)
+    | OpenedEv String String Bool
     | DevicesEv (List Dev) (Maybe String)
     | ErrorEv String
 
@@ -336,8 +400,14 @@ eventDecoder =
                             (D.field "state" D.string |> D.map connFromString)
                             (D.maybe (D.field "device" D.string))
 
-                    "status" ->
-                        D.map StatusEv statusDecoder
+                    "notify" ->
+                        D.map NotifyEv (D.field "bytes" (D.list D.int))
+
+                    "opened" ->
+                        D.map3 OpenedEv
+                            (D.field "id" D.string)
+                            (D.field "pin" D.string)
+                            (D.oneOf [ D.field "isNew" D.bool, D.succeed False ])
 
                     "devices" ->
                         D.map2 DevicesEv
@@ -352,12 +422,17 @@ eventDecoder =
             )
 
 
+defaultPin : String
+defaultPin =
+    "0000"
+
+
 devDecoder : D.Decoder Dev
 devDecoder =
     D.map4 Dev
         (D.field "id" D.string)
         (D.field "name" D.string)
-        (D.oneOf [ D.field "pin" D.string, D.succeed "0000" ])
+        (D.oneOf [ D.field "pin" D.string, D.succeed defaultPin ])
         (D.oneOf [ D.field "available" D.bool, D.succeed True ])
 
 
@@ -375,17 +450,6 @@ connFromString s =
 
         _ ->
             Disconnected
-
-
-statusDecoder : D.Decoder Status
-statusDecoder =
-    D.map6 Status
-        (D.field "power" D.bool)
-        (D.field "temp" D.int)
-        (D.field "mode" D.string)
-        (D.field "fan" D.string)
-        (D.field "room" D.int)
-        (D.field "watts" D.int)
 
 
 
@@ -474,12 +538,27 @@ viewDevRow model dev =
     div [ class "devrow-wrap" ]
         [ div [ classList [ ( "devrow", True ), ( "sel", isCurrent ) ] ]
             [ button [ class "devrow-pick", onClick (PickDevice dev.id) ]
-                [ span [ class ("dot " ++ (if dev.available then "ok" else "off")) ] []
+                [ span
+                    [ class
+                        ("dot "
+                            ++ (if dev.available then
+                                    "ok"
+
+                                else
+                                    "off"
+                               )
+                        )
+                    ]
+                    []
                 , span [ class "devrow-name" ] [ text dev.name ]
                 ]
             , button [ class "devrow-x", title "Reset to 0000 and forget", onClick (RemoveDevice dev.id) ] [ text "×" ]
             ]
-        , if isCurrent then viewPasskey model dev else text ""
+        , if isCurrent then
+            viewPasskey model dev
+
+          else
+            text ""
         ]
 
 
@@ -491,8 +570,24 @@ viewPasskey model dev =
     in
     div [ class "pkrow" ]
         [ span [ class "pk-label" ] [ text "Passkey" ]
-        , span [ class "pk-value" ] [ text (if shown then dev.pin else "••••") ]
-        , button [ class "pk-btn", onClick (RevealPin dev.id) ] [ text (if shown then "Hide" else "Show") ]
+        , span [ class "pk-value" ]
+            [ text
+                (if shown then
+                    dev.pin
+
+                 else
+                    "••••"
+                )
+            ]
+        , button [ class "pk-btn", onClick (RevealPin dev.id) ]
+            [ text
+                (if shown then
+                    "Hide"
+
+                 else
+                    "Show"
+                )
+            ]
         , button [ class "pk-btn", onClick (NewPasskey dev.id) ] [ text "Set new" ]
         ]
 
@@ -555,7 +650,7 @@ viewLcd backlight model =
                 placeholder "OFFLINE"
 
 
-viewReadout : Bool -> Bool -> Status -> List (Html Msg)
+viewReadout : Bool -> Bool -> Codec.Status -> List (Html Msg)
 viewReadout swingV swingH st =
     [ div [ class "lcd-top" ]
         [ span [ classList [ ( "seg", True ), ( "on", st.power ) ] ] [ text (String.toUpper st.mode) ]
@@ -584,7 +679,7 @@ placeholder caption =
     ]
 
 
-wattsText : Status -> String
+wattsText : Codec.Status -> String
 wattsText st =
     if st.watts > 0 then
         String.fromInt st.watts ++ "W"
@@ -693,7 +788,7 @@ viewPad model =
                 , div [ class "rocker" ]
                     [ button [ class "btn up", onClick (SetTemp (Basics.min 30 (st.temp + 1))) ] [ text "+" ]
                     , span [ class "rocker-lbl" ] [ text "TEMP" ]
-                    , button [ class "btn down", onClick (SetTemp (Basics.max 16 (st.temp - 1))) ] [ text "\u{2212}" ]
+                    , button [ class "btn down", onClick (SetTemp (Basics.max 16 (st.temp - 1))) ] [ text "−" ]
                     ]
                 , button [ class "btn", onClick CycleMode ] [ glyph (modeGlyph st.mode), small "MODE" ]
                 , button [ class "btn", onClick CycleFan ] [ glyph "❋", small "FAN" ]

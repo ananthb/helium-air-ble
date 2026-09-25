@@ -1,6 +1,6 @@
 """Wire codec for the broadcast BLE A/C — pure, no Home Assistant imports.
 
-Mirrors web/js/codec.js and tools/ac_frames.js, and is checked against
+Mirrors web/src/Codec.elm and tools/ac_frames.js, and is checked against
 proto/vectors.json by the tests. See docs/protocol.md for the format:
 
 * Commands are a 25-byte header + payload written to the command characteristic.
